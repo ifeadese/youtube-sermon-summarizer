@@ -19,13 +19,11 @@ Writing weekly sermon recaps for a church blog currently requires stitching toge
 
 ## Status
 
-Planning / pre-build — see [Roadmap](docs/ROADMAP.md) for execution plan.
+Planning / pre-build — see [Plan](docs/PLAN.md) for full context, strategy, and execution roadmap.
 
 ## Docs
 
-- [Background & Context](docs/BACKGROUND.md) — the problem story
-- [MVP Plan](docs/PLAN.md) — what we're building and why
-- [Roadmap & Milestones](docs/ROADMAP.md) — step-by-step execution plan (becomes the GitHub Project board)
+- [MVP Plan](docs/PLAN.md) — background, product thinking, roadmap & milestones (all in one doc)
 
 ## Philosophy
 
