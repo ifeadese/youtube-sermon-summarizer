@@ -17,10 +17,15 @@ Writing weekly sermon recaps for a church blog currently requires stitching toge
 - **AI:** Claude API
 - **Transcript:** youtube-transcript-api
 
+## Status
+
+Planning / pre-build — see [Roadmap](docs/ROADMAP.md) for execution plan.
+
 ## Docs
 
 - [Background & Context](docs/BACKGROUND.md) — the problem story
 - [MVP Plan](docs/PLAN.md) — what we're building and why
+- [Roadmap & Milestones](docs/ROADMAP.md) — step-by-step execution plan (becomes the GitHub Project board)
 
 ## Philosophy
 

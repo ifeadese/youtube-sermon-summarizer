@@ -20,8 +20,8 @@ A manual, fragile, multi-tool pipeline with no memory, no consistency, and no ce
 One simple web app that collapses the entire pipeline into a single flow:
 
 - Paste a YouTube URL
-- App fetches the transcript (via youtube-transcript-api — no third-party dependency)
-- Transcript is sent straight into Claude/GPT with a locked, well-engineered prompt
+- App fetches the transcript (via youtube-transcript-api — free locally, needs a proxy service in production)
+- Transcript is sent straight into Claude with a locked, well-engineered prompt
 - Output is a clean, ready-to-publish article
 - Review, copy, done
 
@@ -32,8 +32,8 @@ No login system. No database. No fluff. Just the pipeline — in one screen.
 - **Frontend:** React (single page, minimal UI)
 - **Backend:** Python + FastAPI (one or two endpoints)
 - **AI:** Claude API (more consistent than ChatGPT for structured writing)
-- **Hosting:** Railway or Render (free/cheap tier)
-- **Transcript:** youtube-transcript-api Python library (free, no rate limits, no third-party)
+- **Hosting:** Render free tier or Railway Hobby ($5/mo) — runs ~$5–15/mo at pilot scale including proxy costs
+- **Transcript:** youtube-transcript-api Python library (free and reliable locally; requires a residential proxy in production due to YouTube's cloud IP blocking — see [ROADMAP Known Risks](ROADMAP.md#known-risks))
 
 ## Engineering Philosophy
 

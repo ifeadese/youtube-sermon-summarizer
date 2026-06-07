@@ -113,6 +113,7 @@ Write the system prompt that tells Claude how to transform raw transcript text i
   - [ ] Faithfully represents the sermon's message (no fabricated points or scripture references)
   - [ ] Between 800–1500 words
   - [ ] Reads naturally — no meta-AI phrasing ("In this sermon, the pastor explores..."), no generic filler openers, no repeated phrasing patterns
+  - [ ] Output is plain text with line breaks for paragraphs (no Markdown, no HTML) — so it pastes cleanly into Squarespace's rich text editor without rendering literal `##` or `**` symbols
 - Tested with 3 real transcripts; all pass the checklist above
 
 **Key steps:**
