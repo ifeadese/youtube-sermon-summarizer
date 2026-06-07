@@ -4,6 +4,26 @@ Product thinking doc • June 2026
 
 ---
 
+## Table of Contents
+
+- [Context & Background](#context--background)
+- [The Problem](#the-problem)
+- [Current Workflow (Broken)](#current-workflow-broken)
+- [MVP — What to Build](#mvp--what-to-build)
+- [Tech Stack](#tech-stack)
+- [Engineering Philosophy](#engineering-philosophy)
+- [Long-Term Vision](#long-term-vision)
+- [MVP Roadmap & Milestones](#mvp-roadmap--milestones)
+  - [Milestone 1: Backend Foundation](#milestone-1-backend-foundation)
+  - [Milestone 2: AI Integration](#milestone-2-ai-integration)
+  - [Milestone 3: Frontend](#milestone-3-frontend)
+  - [Milestone 4: Polish & Deploy](#milestone-4-polish--deploy)
+  - [Dependency Map](#dependency-map)
+  - [Known Risks](#known-risks)
+  - [Cost Estimate](#cost-estimate)
+
+---
+
 ## Context & Background
 
 Over a year ago, I started a blog section on my church's official website. The blog was intended to improve our SEO, and also help as an alternative way to recap/catch-up on previous teachings in much less time than having to watch or listen to the whole thing on a media streaming platform. The process for generating content for the blog was:
