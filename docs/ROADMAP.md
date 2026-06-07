@@ -62,6 +62,7 @@ Build `POST /transcript` — accepts a YouTube URL in the request body, fetches 
 **Acceptance criteria:**
 - Valid sermon URL → returns `{"transcript": "...full text..."}` with HTTP 200
 - Invalid URL → returns HTTP 400 with helpful error message
+- Private or unavailable video → returns HTTP 403 with `"This video is private or unavailable"`
 - Video with no captions → returns HTTP 404 with `"No transcript available for this video"`
 - Targets English transcripts (auto-generated or manual); returns a clear error if no English transcript exists
 
@@ -111,14 +112,14 @@ Write the system prompt that tells Claude how to transform raw transcript text i
   - [ ] Contains 3+ subheadings
   - [ ] Faithfully represents the sermon's message (no fabricated points or scripture references)
   - [ ] Between 800–1500 words
-  - [ ] Reads naturally — no "AI-sounding" language
+  - [ ] Reads naturally — no meta-AI phrasing ("In this sermon, the pastor explores..."), no generic filler openers, no repeated phrasing patterns
 - Tested with 3 real transcripts; all pass the checklist above
 
 **Key steps:**
 - Create `backend/prompts.py` with a `SYSTEM_PROMPT` string
 - Include instructions for: role, output format, theological accuracy constraints, tone, target length
 - Test iteratively with real sermon transcripts
-- Use the current Claude Sonnet model (best balance of quality and cost — ~$0.06–0.09 per article)
+- Use the current Claude Sonnet model (best balance of quality and cost — ~$0.05–0.07 per article; see Cost Estimate)
 
 ---
 
@@ -175,7 +176,7 @@ Build the main UI: a text input for the URL, a "Generate Article" button, a load
 - State: `url`, `article`, `loading`, `error`
 - Use `import.meta.env.VITE_API_BASE_URL` for the backend URL (defaults to `http://localhost:8000` in development)
 - Create `.env.example` in `frontend/` with `VITE_API_BASE_URL=http://localhost:8000`
-- On submit: `fetch(\`${API_BASE_URL}/summarize\`, ...)`
+- On submit: call `fetch(API_BASE_URL + "/summarize", ...)` with the URL in the request body
 - Conditional rendering: spinner when loading, error when failed, article when done
 - Style the article display with readable typography
 
@@ -210,10 +211,13 @@ Make sure every possible failure gives the user a friendly, helpful message inst
 **Acceptance criteria:**
 - Every failure produces a user-friendly message
 - Backend returns appropriate HTTP codes per error type:
-  - `400` — invalid input (bad URL, empty request)
+  - `400` — invalid input (bad URL that passes Pydantic but isn't a real YouTube link)
+  - `403` — video is private or restricted
   - `404` — video exists but has no transcript
+  - `422` — malformed request body (FastAPI/Pydantic returns this automatically when the request shape is wrong — e.g. missing fields, wrong types)
+  - `429` — Claude API rate-limited (signals the frontend to retry after a delay)
   - `500` — unexpected server error
-  - `503` — Claude API unavailable or rate-limited
+  - `503` — Claude API down or unreachable
 - Frontend handles network failures (backend unreachable)
 - Tested with: empty input, non-YouTube URL, private video, video without captions
 
@@ -236,6 +240,7 @@ Run 5–10 real church sermons through the system. Compare outputs. Refine the p
   - [ ] Contains 3+ subheadings
   - [ ] Faithfully represents the sermon's message (no fabricated points or scripture)
   - [ ] Between 800–1500 words
+  - [ ] Reads naturally — no meta-AI phrasing, no generic filler openers, no repeated phrasing patterns
   - [ ] You would publish it without edits
 - `docs/PROMPT_LOG.md` records what changed and why
 - Handles edge cases: short sermons, audience interaction, sermon series references
@@ -296,12 +301,26 @@ Issue 1 (Setup + .gitignore)
 
 ### YouTube blocks cloud IPs (critical)
 
-Since late 2024, YouTube blocks transcript requests from datacenter IPs (AWS, GCP, Railway, Render, etc.). The `youtube-transcript-api` library will raise `RequestBlocked` when deployed to any cloud host. **It works perfectly on your laptop but will fail in production.**
+Since late 2024, YouTube blocks transcript requests from most datacenter IPs (AWS, GCP, Railway, Render, etc.). There is a high likelihood that the `youtube-transcript-api` library will raise `RequestBlocked` when deployed to cloud hosts. It works on your laptop (residential IP) but will very likely fail in production — validate early on your target host.
 
-**Impact:** This invalidates the "no third-party dependency" claim and adds a recurring cost.
+**Impact:** This adds a recurring cost and a third-party dependency for production use.
 
-**Mitigations (pick one):**
-1. **Rotating residential proxies** (~$5–15/month) — the library has built-in support:
+**Mitigations:**
+
+1. **Webshare residential proxies (recommended)** — the library's maintainer recommends Webshare and ships a dedicated zero-config helper:
+   ```python
+   from youtube_transcript_api.proxies import WebshareProxyConfig
+
+   ytt_api = YouTubeTranscriptApi(
+       proxy_config=WebshareProxyConfig(
+           proxy_username="your-username",
+           proxy_password="your-password",
+       )
+   )
+   ```
+   This auto-rotates residential IPs with no URL wiring needed. ~$5–10/month for pilot-level usage.
+
+   For other providers (Smartproxy, Oxylabs), use `GenericProxyConfig` with explicit URLs:
    ```python
    from youtube_transcript_api.proxies import GenericProxyConfig
 
@@ -312,13 +331,12 @@ Since late 2024, YouTube blocks transcript requests from datacenter IPs (AWS, GC
        )
    )
    ```
-   Providers: Webshare, Smartproxy, Oxylabs (check current pricing).
 
 2. **Hosted transcript API** (e.g. Supadata) — a paid service that handles the proxy/blocking for you. Simpler but adds a dependency.
 
 3. **Self-host on a residential IP** — e.g. a Raspberry Pi at home. Free but fragile.
 
-**Recommendation:** Start with option 1 (cheapest, library-native). Budget ~$5–10/month for proxies. Test this during Issue 3 development so you're not surprised at deploy time.
+**Recommendation:** Pick Webshare and move on — it's the cheapest, simplest, and library-native option. Don't comparison-shop proxies; that's a rabbit hole that doesn't serve the pilot. Budget ~$5–10/month. Test this during Issue 3 development so you're not surprised at deploy time.
 
 ### The library uses an undocumented YouTube API
 
@@ -331,8 +349,10 @@ Since late 2024, YouTube blocks transcript requests from datacenter IPs (AWS, GC
 **Claude API (per article):**
 - A 45-min sermon transcript ≈ 8,000–12,000 tokens input
 - A 1,500-word article ≈ 2,000 tokens output
-- Using the current Claude Sonnet model (~$3/M input, ~$15/M output): **~$0.06–0.09 per article**
-- At 4 articles/month: **~$0.25–0.36/month**
+- Using the current Claude Sonnet model (~$3/M input, ~$15/M output): **~$0.05–0.07 per article**
+  - Math: 12k input × $3/M = $0.036 + 2k output × $15/M = $0.030 → ~$0.066 at the high end
+  - Add ~10% buffer for system prompt overhead → ~$0.07 conservative max
+- At 4 articles/month: **~$0.20–0.28/month**
 
 **Hosting:**
 - Render free tier: **$0/month** (but services sleep after ~15 min; 30–60s cold start on wake)
