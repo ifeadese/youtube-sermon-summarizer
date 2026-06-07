@@ -250,6 +250,7 @@ Run 5–10 real church sermons through the system. Compare outputs. Refine the p
 - Collect 5–10 real YouTube sermon URLs from your church
 - Run each through `/summarize`
 - Review against the checklist above
+- Paste at least one result into Squarespace's editor and confirm subheadings/paragraphs look acceptable as plain text (if too flat, revisit whether the editor accepts rich text pasting)
 - Iterate on `SYSTEM_PROMPT` and document changes in `PROMPT_LOG.md`
 
 ---
