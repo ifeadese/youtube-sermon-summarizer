@@ -1,4 +1,4 @@
-# Church Blog Automation — MVP Plan
+# YouTube Sermon Summarizer — MVP Plan
 
 Product thinking doc • June 2026
 
