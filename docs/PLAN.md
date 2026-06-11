@@ -231,6 +231,7 @@ Build `POST /summarize` — the main endpoint. Takes a YouTube URL, fetches the 
 - Chain: extract video ID → fetch transcript → send to Claude → return article
 - Add CORS middleware (a browser permission that lets your frontend talk to your backend — without it, the browser blocks the request)
 - Add `POST /summarize` route in `main.py`
+- Use the **prompt-caching feature** (Anthropic's term — it's one feature) and attach the `cache_control` marker to the **transcript block** in the request. This barely matters in production (each sermon runs once), but during prompt tuning (Issue 11) you re-run the *same* transcript dozens of times — caching bills those repeats at ~10% of normal input cost, roughly a 3× cut on tuning spend. Attach the marker to the transcript, **not** the system-prompt block: the transcript (8–12k tokens) clears the ~2,048-token cache minimum, while the system prompt alone may not.
 
 ---
 
@@ -345,6 +346,7 @@ Run 5–10 real church sermons through the system. Compare outputs. Refine the p
 - Review against the checklist above
 - Paste at least one result into Squarespace's editor and confirm subheadings/paragraphs look acceptable as plain text (if too flat, revisit whether the editor accepts rich text pasting)
 - Iterate on `SYSTEM_PROMPT` and document changes in `PROMPT_LOG.md`
+- This is the most API-spend-heavy phase (re-running the same sermons many times). Make sure transcript prompt caching from Issue 6 is on — it cuts the cost of these repeated runs by ~3×.
 
 ---
 
@@ -441,13 +443,20 @@ Since late 2024, YouTube blocks transcript requests from most datacenter IPs (AW
 
 ### Cost Estimate
 
+**Important:** you need the **Claude developer API** (pay-as-you-go, prepaid credits via console.anthropic.com), **not** a Claude.ai Pro/Max subscription — a chat subscription does not power your app. There is no monthly "plan" to pick; you load credits and draw them down per token used.
+
 **Claude API (per article):**
 - A 45-min sermon transcript ≈ 8,000–12,000 tokens input
 - A 1,500-word article ≈ 2,000 tokens output
 - Using the current Claude Sonnet model (~$3/M input, ~$15/M output): **~$0.05–0.07 per article**
   - Math: 12k input × $3/M = $0.036 + 2k output × $15/M = $0.030 → ~$0.066 at the high end
   - Add ~10% buffer for system prompt overhead → ~$0.07 conservative max
-- At 4 articles/month: **~$0.20–0.28/month**
+- At 4 articles/month in steady production: **~$0.20–0.28/month**
+
+**Claude API (dev phases — the real cost driver):**
+- Production cost is trivial, but prompt tuning, demos, debugging, and testing re-run full generations many times. Each test/discarded output still costs full tokens.
+- Active prompt-tuning months (Issues 5/11): hundreds of runs → **~$15–30**. Prompt caching (Issue 6) cuts the repeat-run portion ~3×.
+- **Recommendation:** load **~$50 of prepaid credits** once at the start. It comfortably covers the entire build/pilot; once the prompt is locked, spend collapses to near-zero and the balance lasts many months.
 
 **Hosting:**
 - Render free tier: **$0/month** (but services sleep after ~15 min; 30–60s cold start on wake)
