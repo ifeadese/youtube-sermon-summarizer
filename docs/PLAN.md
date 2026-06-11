@@ -119,7 +119,7 @@ A step-by-step plan to go from zero code to a working, deployed sermon summarize
 Create the `backend/` folder, install Python libraries (FastAPI, uvicorn, youtube-transcript-api), and set up `requirements.txt`.
 
 **Acceptance criteria:**
-- `pip install -r requirements.txt` works without errors
+- `cd backend && pip install -r requirements.txt` works without errors (all backend commands run from `backend/`; there is no root `requirements.txt` — the frontend uses npm)
 - `localhost:8000/health` responds with `{"status": "ok"}`
 - `.gitignore` includes `.env`, `__pycache__/`, and `venv/` (so secrets and junk never get committed)
 
@@ -128,7 +128,7 @@ Create the `backend/` folder, install Python libraries (FastAPI, uvicorn, youtub
 - Install: `fastapi`, `uvicorn[standard]`, `youtube-transcript-api`
 - Add a `/health` route
 - Create `.gitignore` with `.env`, `__pycache__/`, `venv/`, `node_modules/`, `dist/`
-- Test with `uvicorn main:app --reload`
+- Test with `cd backend && uvicorn main:app --reload`
 
 ---
 
