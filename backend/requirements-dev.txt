@@ -1,0 +1,4 @@
+# Test-only dependencies (not needed to run the app).
+# Install with: pip install -r requirements-dev.txt
+pytest
+httpx

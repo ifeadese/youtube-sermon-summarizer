@@ -28,8 +28,21 @@ curl http://localhost:8000/health
 
 ## Endpoints
 
-| Method | Path      | Description                          |
-|--------|-----------|--------------------------------------|
-| GET    | `/health` | Liveness check — returns `{"status": "ok"}` |
+| Method | Path         | Description                                  |
+|--------|--------------|----------------------------------------------|
+| GET    | `/health`    | Liveness check — returns `{"status": "ok"}`  |
+| POST   | `/transcript`| Body `{"url": "<youtube-url>"}` → `{"transcript": "..."}` |
 
-_Transcript and summarize endpoints arrive in later issues (#3, #6)._
+_The summarize endpoint arrives in a later issue (#7)._
+
+## Tests
+
+```bash
+cd backend
+./venv/bin/pip install -r requirements-dev.txt   # pytest + httpx (test-only)
+./venv/bin/pytest                                # runs the full suite
+```
+
+The pure-logic tests also run without pytest: `python test_utils.py`,
+`python test_transcript.py`. The HTTP-contract tests (`test_api.py`) need
+pytest + httpx.
