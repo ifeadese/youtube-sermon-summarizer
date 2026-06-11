@@ -1,6 +1,6 @@
 """Tests for fetch_transcript + the /transcript route.
 
-The only network call (`YouTubeTranscriptApi.fetch`) is monkeypatched, so
+The only network call (`YouTubeTranscriptApi().fetch`) is monkeypatched, so
 these run deterministically with no real YouTube traffic.
 
 Run standalone:  python test_transcript.py
@@ -9,9 +9,9 @@ Or with pytest:  pytest test_transcript.py
 
 from types import SimpleNamespace
 
+import requests
 from fastapi import HTTPException
 
-import main as main_mod
 import transcript as t_mod
 from main import TranscriptRequest, transcript as transcript_route
 from transcript import TranscriptError, fetch_transcript
@@ -30,7 +30,7 @@ from youtube_transcript_api import (
 VID = "dQw4w9WgXcQ"
 VALID_URL = "https://youtu.be/dQw4w9WgXcQ"
 
-# Each library exception → the HTTP status fetch_transcript should map it to.
+# Library exception (or transport error) → expected HTTP status from fetch_transcript.
 EXCEPTION_STATUS = [
     (VideoUnavailable(VID), 403),
     (VideoUnplayable(VID, "reason", []), 403),
@@ -41,14 +41,38 @@ EXCEPTION_STATUS = [
     (IpBlocked(VID), 503),
     (InvalidVideoId(VID), 400),
     (CouldNotRetrieveTranscript(VID), 502),
+    (requests.exceptions.ConnectionError("boom"), 503),
+    (requests.exceptions.Timeout("slow"), 503),
+]
+
+# A few exact-message contracts (substring match) that callers/users rely on.
+MESSAGE_CONTAINS = [
+    (NoTranscriptFound(VID, ["en"], []), "English"),
+    (AgeRestricted(VID), "age-restricted"),
+    (TranscriptsDisabled(VID), "No transcript available"),
+    (VideoUnavailable(VID), "private or unavailable"),
 ]
 
 
-def _patch_fetch(func):
-    """Swap the network fetch; return the original so the caller can restore it."""
-    original = t_mod._ytt_api.fetch
-    t_mod._ytt_api.fetch = func
+def _install_fetch(func):
+    """Patch YouTubeTranscriptApi so the per-call instance's .fetch is `func`.
+
+    Returns the original class so the caller can restore it.
+    """
+    original = t_mod.YouTubeTranscriptApi
+
+    class _FakeApi:
+        def fetch(self, video_id, languages=None):
+            return func(video_id, languages=languages)
+
+    t_mod.YouTubeTranscriptApi = _FakeApi
     return original
+
+
+def _raises(exc):
+    def _fetch(video_id, languages=None):
+        raise exc
+    return _fetch
 
 
 def _snippets(*texts):
@@ -56,19 +80,31 @@ def _snippets(*texts):
 
 
 def test_fetch_joins_snippet_text():
-    original = _patch_fetch(lambda video_id, languages=None: _snippets("Hello", "there", "world"))
+    original = _install_fetch(lambda v, languages=None: _snippets("Hello", "there", "world"))
     try:
         assert fetch_transcript(VID) == "Hello there world"
     finally:
-        t_mod._ytt_api.fetch = original
+        t_mod.YouTubeTranscriptApi = original
+
+
+def test_fetch_requests_english_only():
+    seen = {}
+
+    def _fetch(video_id, languages=None):
+        seen["languages"] = languages
+        return _snippets("hi")
+
+    original = _install_fetch(_fetch)
+    try:
+        fetch_transcript(VID)
+        assert seen["languages"] == ["en"], f"expected ['en'], got {seen['languages']!r}"
+    finally:
+        t_mod.YouTubeTranscriptApi = original
 
 
 def test_fetch_maps_exceptions_to_status():
     for exc, expected_status in EXCEPTION_STATUS:
-        def raise_it(video_id, languages=None, _exc=exc):
-            raise _exc
-
-        original = _patch_fetch(raise_it)
+        original = _install_fetch(_raises(exc))
         try:
             fetch_transcript(VID)
         except TranscriptError as err:
@@ -79,16 +115,41 @@ def test_fetch_maps_exceptions_to_status():
         else:
             raise AssertionError(f"{type(exc).__name__}: expected TranscriptError")
         finally:
-            t_mod._ytt_api.fetch = original
+            t_mod.YouTubeTranscriptApi = original
+
+
+def test_fetch_error_messages_are_specific():
+    for exc, needle in MESSAGE_CONTAINS:
+        original = _install_fetch(_raises(exc))
+        try:
+            fetch_transcript(VID)
+        except TranscriptError as err:
+            assert needle in err.detail, f"{type(exc).__name__}: {needle!r} not in {err.detail!r}"
+        else:
+            raise AssertionError(f"{type(exc).__name__}: expected TranscriptError")
+        finally:
+            t_mod.YouTubeTranscriptApi = original
+
+
+def test_fetch_empty_transcript_is_404():
+    for empty in (_snippets(), _snippets("", "   ")):
+        original = _install_fetch(lambda v, languages=None, _e=empty: _e)
+        try:
+            fetch_transcript(VID)
+        except TranscriptError as err:
+            assert err.status_code == 404
+        else:
+            raise AssertionError("expected TranscriptError 404 for empty transcript")
+        finally:
+            t_mod.YouTubeTranscriptApi = original
 
 
 def test_route_returns_transcript_on_success():
-    original = _patch_fetch(lambda video_id, languages=None: _snippets("a", "b"))
+    original = _install_fetch(lambda v, languages=None: _snippets("a", "b"))
     try:
-        result = transcript_route(TranscriptRequest(url=VALID_URL))
-        assert result == {"transcript": "a b"}
+        assert transcript_route(TranscriptRequest(url=VALID_URL)) == {"transcript": "a b"}
     finally:
-        t_mod._ytt_api.fetch = original
+        t_mod.YouTubeTranscriptApi = original
 
 
 def test_route_invalid_url_is_400():
@@ -101,10 +162,7 @@ def test_route_invalid_url_is_400():
 
 
 def test_route_propagates_transcript_error_status():
-    def raise_disabled(video_id, languages=None):
-        raise TranscriptsDisabled(VID)
-
-    original = _patch_fetch(raise_disabled)
+    original = _install_fetch(_raises(TranscriptsDisabled(VID)))
     try:
         transcript_route(TranscriptRequest(url=VALID_URL))
     except HTTPException as err:
@@ -112,7 +170,7 @@ def test_route_propagates_transcript_error_status():
     else:
         raise AssertionError("expected HTTPException 404")
     finally:
-        t_mod._ytt_api.fetch = original
+        t_mod.YouTubeTranscriptApi = original
 
 
 if __name__ == "__main__":
