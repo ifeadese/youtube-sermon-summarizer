@@ -33,7 +33,24 @@ curl http://localhost:8000/health
 | GET    | `/health`    | Liveness check — returns `{"status": "ok"}`  |
 | POST   | `/transcript`| Body `{"url": "<youtube-url>"}` → `{"transcript": "..."}` |
 
-_The summarize endpoint arrives in a later issue (#7)._
+_The summarize endpoint arrives in a later issue (#7). The article generator
+(`generate_article`) exists now but isn't wired to a route yet._
+
+## Generating an article (your own key)
+
+The article generator reads `ANTHROPIC_API_KEY` from a local `.env`. Nothing is
+hardcoded — bring your own personal key (the developer API from
+[console.anthropic.com](https://console.anthropic.com), **not** a Claude.ai
+Pro/Max subscription).
+
+```bash
+cd backend
+cp .env.example .env          # then edit .env and paste your key
+./venv/bin/pip install -r requirements.txt
+
+# End-to-end: URL -> transcript -> Claude -> article (makes a real, billed call)
+./venv/bin/python generate_article_demo.py "https://www.youtube.com/watch?v=VIDEO_ID"
+```
 
 ## Tests
 
