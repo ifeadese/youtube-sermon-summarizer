@@ -1,0 +1,35 @@
+# Backend — YouTube Sermon Summarizer
+
+FastAPI server for the sermon summarizer. All commands below are run **from this `backend/` directory.**
+
+## Setup
+
+```bash
+cd backend
+python3 -m venv venv
+./venv/bin/pip install -r requirements.txt
+```
+
+## Run
+
+```bash
+cd backend
+./venv/bin/uvicorn main:app --reload
+```
+
+The server starts on `http://localhost:8000`.
+
+## Verify
+
+```bash
+curl http://localhost:8000/health
+# → {"status": "ok"}
+```
+
+## Endpoints
+
+| Method | Path      | Description                          |
+|--------|-----------|--------------------------------------|
+| GET    | `/health` | Liveness check — returns `{"status": "ok"}` |
+
+_Transcript and summarize endpoints arrive in later issues (#3, #6)._
