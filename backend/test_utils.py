@@ -19,6 +19,12 @@ VALID = {
     "embed": ("https://www.youtube.com/embed/dQw4w9WgXcQ", "dQw4w9WgXcQ"),
     "shorts": ("https://www.youtube.com/shorts/dQw4w9WgXcQ", "dQw4w9WgXcQ"),
     "whitespace": ("  https://youtu.be/dQw4w9WgXcQ  ", "dQw4w9WgXcQ"),
+    "explicit_port": ("https://youtube.com:443/watch?v=dQw4w9WgXcQ", "dQw4w9WgXcQ"),
+    "fragment": ("https://www.youtube.com/watch?v=dQw4w9WgXcQ#t=10", "dQw4w9WgXcQ"),
+    "trailing_slash": ("https://youtu.be/dQw4w9WgXcQ/", "dQw4w9WgXcQ"),
+    "uppercase_host": ("https://WWW.YOUTUBE.COM/watch?v=dQw4w9WgXcQ", "dQw4w9WgXcQ"),
+    "playlist_param": ("https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PLabc", "dQw4w9WgXcQ"),
+    "http_scheme": ("http://youtube.com/watch?v=dQw4w9WgXcQ", "dQw4w9WgXcQ"),
 }
 
 INVALID = {
@@ -31,6 +37,9 @@ INVALID = {
     "id_too_short": "https://youtu.be/abc",
     "id_too_long": "https://youtu.be/dQw4w9WgXcQEXTRA",
     "bare_domain": "https://www.youtube.com/",
+    "non_http_scheme": "abc://youtube.com/watch?v=dQw4w9WgXcQ",
+    "mailto_scheme": "mailto:someone@youtube.com",
+    "empty_v_param": "https://www.youtube.com/watch?v=",
 }
 
 

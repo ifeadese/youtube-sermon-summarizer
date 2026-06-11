@@ -33,13 +33,19 @@ def extract_video_id(url: str) -> str:
         raise ValueError("Please provide a YouTube URL.")
 
     raw = url.strip()
-    # urlparse only populates netloc when a scheme is present; add one if missing
-    # so "youtube.com/watch?v=..." parses the same as the https form.
-    if "://" not in raw:
-        raw = "https://" + raw
-
     parsed = urlparse(raw)
-    host = parsed.netloc.lower()
+    # A missing scheme leaves both scheme and netloc empty (the host lands in
+    # `path`). Re-parse with an https:// prefix so "youtube.com/watch?v=..."
+    # is recognized the same as the full URL.
+    if not parsed.scheme and not parsed.netloc:
+        parsed = urlparse("https://" + raw)
+
+    # Only real web URLs are YouTube links — reject mailto:, ftp:, abc://, etc.
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError(f"That doesn't look like a YouTube URL: {url!r}")
+
+    # `hostname` is lowercased and excludes any port or userinfo (unlike netloc).
+    host = parsed.hostname or ""
     for prefix in ("www.", "m."):
         if host.startswith(prefix):
             host = host[len(prefix):]
