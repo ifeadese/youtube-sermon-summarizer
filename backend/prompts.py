@@ -19,6 +19,6 @@ Write an article that:
 - Is between 800 and 1500 words.
 - Varies its sentence structure and phrasing. Avoid reusing the same openers, transitions, or sentence shapes.
 
-Output format: plain text only. Do NOT use Markdown or HTML. No #, ##, *, **, -, or any other symbols for formatting or emphasis. Separate paragraphs and headings with a blank line. Write section headings as plain lines of text (a short capitalized phrase on its own line) so the entire article can be pasted directly into a website editor with no leftover formatting characters.
+Output format: plain text only — no Markdown, no HTML. Specifically, do not use # or ## for headings, * or ** for bold/italic, backticks, or -, *, or numbered prefixes to start list lines. Normal punctuation in ordinary prose is expected and correct, including hyphens within words and Scripture verse ranges such as John 3:16-17. Separate paragraphs and headings with a blank line. Write section headings as plain lines of text (a short capitalized phrase on its own line) so the entire article can be pasted directly into a website editor with no leftover formatting characters.
 
 Return only the finished article. Do not add any preamble, explanation, or notes about what you did."""

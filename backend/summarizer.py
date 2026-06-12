@@ -45,7 +45,18 @@ def generate_article(transcript: str) -> str:
         messages=[{"role": "user", "content": transcript}],
     )
 
-    article = "".join(
+    # Truncation guard: if Claude hit the output cap, the article is cut off
+    # mid-sentence. Fail loudly rather than return a partial article that looks
+    # complete to the caller.
+    if response.stop_reason == "max_tokens":
+        raise ValueError(
+            f"Claude hit the {MAX_TOKENS}-token output limit before finishing the "
+            "article. Increase MAX_TOKENS and retry."
+        )
+
+    # Join text blocks with paragraph breaks (not ""), so multi-block responses
+    # don't run two paragraphs together. In practice there's usually one block.
+    article = "\n\n".join(
         block.text for block in response.content if block.type == "text"
     ).strip()
 

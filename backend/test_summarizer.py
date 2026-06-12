@@ -17,20 +17,29 @@ from summarizer import generate_article
 TRANSCRIPT = "Today we are talking about the blessing of Abraham. The Bible says..."
 
 
-def _install_client(*, text=None, capture=None):
-    """Patch _get_client with a fake whose messages.create returns `text`.
+def _install_client(*, text=None, blocks=None, stop_reason="end_turn", capture=None):
+    """Patch _get_client with a fake messages.create.
 
-    If `capture` (a dict) is given, the create() kwargs are recorded into it.
+    - `text`: shorthand for a single text block.
+    - `blocks`: list of (type, text) tuples for multi/mixed-block responses.
+    - `stop_reason`: set on the fake response (e.g. "max_tokens").
+    - `capture`: if given (a dict), create()'s kwargs are recorded into it.
     Returns the original _get_client so the caller can restore it.
     """
     original = s._get_client
+
+    if blocks is not None:
+        content = [SimpleNamespace(type=t, text=x) for (t, x) in blocks]
+    elif text is not None:
+        content = [SimpleNamespace(type="text", text=text)]
+    else:
+        content = []
 
     class _FakeMessages:
         def create(self, **kwargs):
             if capture is not None:
                 capture.update(kwargs)
-            blocks = [SimpleNamespace(type="text", text=text)] if text is not None else []
-            return SimpleNamespace(content=blocks)
+            return SimpleNamespace(content=list(content), stop_reason=stop_reason)
 
     class _FakeClient:
         messages = _FakeMessages()
@@ -89,6 +98,48 @@ def test_empty_model_output_raises():
             raise AssertionError(f"expected ValueError when model returns {empty!r}")
         finally:
             s._get_client = original
+
+
+def test_max_tokens_truncation_raises():
+    # A truncated article must fail loudly, not return partial text as success.
+    original = _install_client(text="An unfinished article that stops mid-", stop_reason="max_tokens")
+    try:
+        generate_article(TRANSCRIPT)
+    except ValueError as exc:
+        assert "limit" in str(exc).lower()
+    else:
+        raise AssertionError("expected ValueError on stop_reason='max_tokens'")
+    finally:
+        s._get_client = original
+
+
+def test_multiple_text_blocks_joined_with_breaks():
+    original = _install_client(blocks=[("text", "Para one."), ("text", "Para two.")])
+    try:
+        assert generate_article(TRANSCRIPT) == "Para one.\n\nPara two."
+    finally:
+        s._get_client = original
+
+
+def test_non_text_blocks_ignored():
+    # e.g. a thinking block interleaved before the article text.
+    original = _install_client(blocks=[("thinking", "internal reasoning"), ("text", "The article body.")])
+    try:
+        assert generate_article(TRANSCRIPT) == "The article body."
+    finally:
+        s._get_client = original
+
+
+def test_whitespace_only_multiblock_raises():
+    original = _install_client(blocks=[("text", "   "), ("text", "\n\t")])
+    try:
+        generate_article(TRANSCRIPT)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("expected ValueError for whitespace-only output")
+    finally:
+        s._get_client = original
 
 
 if __name__ == "__main__":
