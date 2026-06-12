@@ -13,6 +13,9 @@ from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
+import anthropic
+import httpx
+
 import summarizer as sum_mod
 import transcript as t_mod
 from main import app
@@ -141,3 +144,42 @@ def test_summarize_truncated_article_502(monkeypatch):
     monkeypatch.setattr(sum_mod, "_get_client", _fake_claude("cut off mid-", stop_reason="max_tokens"))
     resp = client.post("/summarize", json={"url": VALID_URL})
     assert resp.status_code == 502
+
+
+def _claude_raises(exc):
+    """Patch summarizer._get_client so the Claude call raises `exc`."""
+
+    class _Msgs:
+        def create(self, **kwargs):
+            raise exc
+
+    class _Client:
+        messages = _Msgs()
+
+    return lambda: _Client()
+
+
+# Each Claude failure class maps to a specific HTTP code. Without these tests, a
+# catch-order or mapping regression (e.g. 429 silently downgraded to 502) is invisible.
+_REQ = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+CLAUDE_ERROR_STATUS = [
+    (anthropic.RateLimitError("rl", response=httpx.Response(429, request=_REQ), body=None), 429),
+    (anthropic.APIConnectionError(message="boom", request=_REQ), 503),
+    (anthropic.APIStatusError("err", response=httpx.Response(500, request=_REQ), body=None), 502),
+    # APIResponseValidationError subclasses APIError but NOT APIStatusError — the
+    # case that previously escaped to a raw 500; the catch-all now maps it to 502.
+    (anthropic.APIResponseValidationError(response=httpx.Response(200, request=_REQ), body=None), 502),
+]
+
+
+def test_summarize_claude_errors_mapped(monkeypatch):
+    for exc, expected in CLAUDE_ERROR_STATUS:
+        monkeypatch.setattr(
+            t_mod, "YouTubeTranscriptApi",
+            _fake_api(snippets=[SimpleNamespace(text="some sermon content")]),
+        )
+        monkeypatch.setattr(sum_mod, "_get_client", _claude_raises(exc))
+        resp = client.post("/summarize", json={"url": VALID_URL})
+        assert resp.status_code == expected, (
+            f"{type(exc).__name__}: got {resp.status_code}, expected {expected}"
+        )

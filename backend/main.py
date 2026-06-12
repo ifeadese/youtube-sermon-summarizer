@@ -21,7 +21,9 @@ app = FastAPI(title="YouTube Sermon Summarizer")
 # Which frontend origins may call this API. Defaults to the local dev servers
 # (Vite 5173, CRA 3000); override with ALLOWED_ORIGINS (comma-separated) at
 # deploy time — no production URL is hardcoded here.
-_origins = os.environ.get("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000")
+# `or` (not the get() default) so an empty ALLOWED_ORIGINS="" falls back to the
+# dev defaults instead of silently blocking every browser origin.
+_origins = os.environ.get("ALLOWED_ORIGINS") or "http://localhost:5173,http://localhost:3000"
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[o.strip() for o in _origins.split(",") if o.strip()],
@@ -78,6 +80,11 @@ def summarize(request: URLRequest):
         raise HTTPException(status_code=503, detail="Could not reach the AI service. Try again.")
     except anthropic.APIStatusError:
         raise HTTPException(status_code=502, detail="The AI service returned an error. Try again.")
+    except anthropic.APIError:
+        # Catch-all for any other Anthropic error (e.g. APIResponseValidationError)
+        # so no AI-step failure escapes as an unhandled 500. Must come last —
+        # APIError is the base class. Issue #11 refines this mapping.
+        raise HTTPException(status_code=502, detail="The AI service returned an unexpected response. Try again.")
 
     return {"article": article}
 
