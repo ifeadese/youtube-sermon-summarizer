@@ -1,20 +1,37 @@
 """YouTube Sermon Summarizer — FastAPI backend.
 
-Entry point for the API server. Exposes a health check and a /transcript
-route; the /summarize endpoint arrives in a later issue.
+Entry point for the API server. Exposes a health check, a /transcript route
+(dev/debug), and /summarize — the main endpoint that turns a YouTube URL into a
+finished article in one call.
 """
 
+import os
+
+import anthropic
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from summarizer import generate_article
 from transcript import TranscriptError, fetch_transcript
 from utils import extract_video_id
 
 app = FastAPI(title="YouTube Sermon Summarizer")
 
+# Which frontend origins may call this API. Defaults to the local dev servers
+# (Vite 5173, CRA 3000); override with ALLOWED_ORIGINS (comma-separated) at
+# deploy time — no production URL is hardcoded here.
+_origins = os.environ.get("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[o.strip() for o in _origins.split(",") if o.strip()],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+)
 
-class TranscriptRequest(BaseModel):
-    """Request body for /transcript — a single YouTube URL."""
+
+class URLRequest(BaseModel):
+    """Request body for /transcript and /summarize — a single YouTube URL."""
 
     url: str
 
@@ -26,20 +43,48 @@ def health():
 
 
 @app.post("/transcript")
-def transcript(request: TranscriptRequest):
+def transcript(request: URLRequest):
     """Fetch the full transcript text for a YouTube URL.
 
     Primarily a development/debug route; the shipped app uses /summarize,
     which calls the same fetch logic internally.
     """
-    try:
-        video_id = extract_video_id(request.url)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
-
+    video_id = _video_id_or_400(request.url)
     try:
         text = fetch_transcript(video_id)
     except TranscriptError as exc:
         raise HTTPException(status_code=exc.status_code, detail=exc.detail)
-
     return {"transcript": text}
+
+
+@app.post("/summarize")
+def summarize(request: URLRequest):
+    """The main endpoint: YouTube URL → transcript → Claude → finished article."""
+    video_id = _video_id_or_400(request.url)
+
+    try:
+        transcript_text = fetch_transcript(video_id)
+    except TranscriptError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail)
+
+    try:
+        article = generate_article(transcript_text)
+    except ValueError as exc:
+        # Empty/truncated model output — unusable result from the AI step.
+        raise HTTPException(status_code=502, detail=f"Article generation failed: {exc}")
+    except anthropic.RateLimitError:
+        raise HTTPException(status_code=429, detail="The AI service is rate-limited. Try again shortly.")
+    except anthropic.APIConnectionError:
+        raise HTTPException(status_code=503, detail="Could not reach the AI service. Try again.")
+    except anthropic.APIStatusError:
+        raise HTTPException(status_code=502, detail="The AI service returned an error. Try again.")
+
+    return {"article": article}
+
+
+def _video_id_or_400(url: str) -> str:
+    """Validate a URL and return its video ID, or raise HTTP 400."""
+    try:
+        return extract_video_id(url)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))

@@ -13,6 +13,7 @@ from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
+import summarizer as sum_mod
 import transcript as t_mod
 from main import app
 from youtube_transcript_api import TranscriptsDisabled
@@ -81,3 +82,62 @@ def test_transcript_mapped_error_is_serialized(monkeypatch):
     assert resp.status_code == 404
     body = resp.json()
     assert body == {"detail": "No transcript available for this video."}
+
+
+# ---- /summarize (the main endpoint: URL -> transcript -> Claude -> article) ----
+# Both network steps are mocked: the transcript fetch and the Claude call.
+
+def _fake_claude(article, *, stop_reason="end_turn"):
+    """Patch summarizer._get_client with a fake that returns `article`."""
+
+    class _Msgs:
+        def create(self, **kwargs):
+            return SimpleNamespace(
+                content=[SimpleNamespace(type="text", text=article)],
+                stop_reason=stop_reason,
+            )
+
+    class _Client:
+        messages = _Msgs()
+
+    return lambda: _Client()
+
+
+def test_summarize_success(monkeypatch):
+    monkeypatch.setattr(
+        t_mod, "YouTubeTranscriptApi",
+        _fake_api(snippets=[SimpleNamespace(text="The blessing of Abraham.")]),
+    )
+    monkeypatch.setattr(sum_mod, "_get_client", _fake_claude("My Title\n\nA fine article."))
+    resp = client.post("/summarize", json={"url": VALID_URL})
+    assert resp.status_code == 200
+    assert resp.json() == {"article": "My Title\n\nA fine article."}
+
+
+def test_summarize_invalid_url_400():
+    resp = client.post("/summarize", json={"url": "not a youtube link"})
+    assert resp.status_code == 400
+
+
+def test_summarize_missing_field_422():
+    resp = client.post("/summarize", json={})
+    assert resp.status_code == 422
+
+
+def test_summarize_transcript_error_404(monkeypatch):
+    monkeypatch.setattr(
+        t_mod, "YouTubeTranscriptApi", _fake_api(raises=TranscriptsDisabled(VID))
+    )
+    resp = client.post("/summarize", json={"url": VALID_URL})
+    assert resp.status_code == 404
+
+
+def test_summarize_truncated_article_502(monkeypatch):
+    # Claude hits the output cap → generate_article raises → 502, not a partial 200.
+    monkeypatch.setattr(
+        t_mod, "YouTubeTranscriptApi",
+        _fake_api(snippets=[SimpleNamespace(text="some sermon content")]),
+    )
+    monkeypatch.setattr(sum_mod, "_get_client", _fake_claude("cut off mid-", stop_reason="max_tokens"))
+    resp = client.post("/summarize", json={"url": VALID_URL})
+    assert resp.status_code == 502

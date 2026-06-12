@@ -70,10 +70,13 @@ curl http://localhost:8000/health
 | Method | Path         | Description                                  |
 |--------|--------------|----------------------------------------------|
 | GET    | `/health`    | Liveness check — returns `{"status": "ok"}`  |
-| POST   | `/transcript`| Body `{"url": "<youtube-url>"}` → `{"transcript": "..."}` |
+| POST   | `/transcript`| Body `{"url": "<youtube-url>"}` → `{"transcript": "..."}` (dev/debug) |
+| POST   | `/summarize` | Body `{"url": "<youtube-url>"}` → `{"article": "..."}` — the main endpoint |
 
-_The summarize endpoint arrives in a later issue (#7). The article generator
-(`generate_article`) exists now but isn't wired to a route yet._
+`/summarize` runs the full pipeline (URL → transcript → Claude → article) and
+needs `ANTHROPIC_API_KEY` set (see Onboarding). CORS allows `localhost:5173`
+and `localhost:3000` by default; override with the `ALLOWED_ORIGINS` env var
+(comma-separated) at deploy time.
 
 ## Generating an article (your own key)
 
