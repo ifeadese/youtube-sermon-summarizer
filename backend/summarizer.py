@@ -42,7 +42,23 @@ def generate_article(transcript: str) -> str:
         model=MODEL,
         max_tokens=MAX_TOKENS,
         system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": transcript}],
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "text",
+                        "text": transcript,
+                        # Cache the transcript: repeated runs of the SAME transcript
+                        # with the SAME system prompt bill this block at ~10%. (No
+                        # benefit in production — each sermon runs once — or when the
+                        # system prompt changes between runs, which invalidates the
+                        # prefix. See PLAN.md caching note.)
+                        "cache_control": {"type": "ephemeral"},
+                    }
+                ],
+            }
+        ],
     )
 
     # Truncation guard: if Claude hit the output cap, the article is cut off

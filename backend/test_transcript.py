@@ -13,7 +13,7 @@ import requests
 from fastapi import HTTPException
 
 import transcript as t_mod
-from main import TranscriptRequest, transcript as transcript_route
+from main import URLRequest, transcript as transcript_route
 from transcript import TranscriptError, fetch_transcript
 from youtube_transcript_api import (
     AgeRestricted,
@@ -147,14 +147,14 @@ def test_fetch_empty_transcript_is_404():
 def test_route_returns_transcript_on_success():
     original = _install_fetch(lambda v, languages=None: _snippets("a", "b"))
     try:
-        assert transcript_route(TranscriptRequest(url=VALID_URL)) == {"transcript": "a b"}
+        assert transcript_route(URLRequest(url=VALID_URL)) == {"transcript": "a b"}
     finally:
         t_mod.YouTubeTranscriptApi = original
 
 
 def test_route_invalid_url_is_400():
     try:
-        transcript_route(TranscriptRequest(url="not a youtube link"))
+        transcript_route(URLRequest(url="not a youtube link"))
     except HTTPException as err:
         assert err.status_code == 400
     else:
@@ -164,7 +164,7 @@ def test_route_invalid_url_is_400():
 def test_route_propagates_transcript_error_status():
     original = _install_fetch(_raises(TranscriptsDisabled(VID)))
     try:
-        transcript_route(TranscriptRequest(url=VALID_URL))
+        transcript_route(URLRequest(url=VALID_URL))
     except HTTPException as err:
         assert err.status_code == 404
     else:

@@ -13,6 +13,10 @@ from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 
+import anthropic
+import httpx
+
+import summarizer as sum_mod
 import transcript as t_mod
 from main import app
 from youtube_transcript_api import TranscriptsDisabled
@@ -81,3 +85,101 @@ def test_transcript_mapped_error_is_serialized(monkeypatch):
     assert resp.status_code == 404
     body = resp.json()
     assert body == {"detail": "No transcript available for this video."}
+
+
+# ---- /summarize (the main endpoint: URL -> transcript -> Claude -> article) ----
+# Both network steps are mocked: the transcript fetch and the Claude call.
+
+def _fake_claude(article, *, stop_reason="end_turn"):
+    """Patch summarizer._get_client with a fake that returns `article`."""
+
+    class _Msgs:
+        def create(self, **kwargs):
+            return SimpleNamespace(
+                content=[SimpleNamespace(type="text", text=article)],
+                stop_reason=stop_reason,
+            )
+
+    class _Client:
+        messages = _Msgs()
+
+    return lambda: _Client()
+
+
+def test_summarize_success(monkeypatch):
+    monkeypatch.setattr(
+        t_mod, "YouTubeTranscriptApi",
+        _fake_api(snippets=[SimpleNamespace(text="The blessing of Abraham.")]),
+    )
+    monkeypatch.setattr(sum_mod, "_get_client", _fake_claude("My Title\n\nA fine article."))
+    resp = client.post("/summarize", json={"url": VALID_URL})
+    assert resp.status_code == 200
+    assert resp.json() == {"article": "My Title\n\nA fine article."}
+
+
+def test_summarize_invalid_url_400():
+    resp = client.post("/summarize", json={"url": "not a youtube link"})
+    assert resp.status_code == 400
+
+
+def test_summarize_missing_field_422():
+    resp = client.post("/summarize", json={})
+    assert resp.status_code == 422
+
+
+def test_summarize_transcript_error_404(monkeypatch):
+    monkeypatch.setattr(
+        t_mod, "YouTubeTranscriptApi", _fake_api(raises=TranscriptsDisabled(VID))
+    )
+    resp = client.post("/summarize", json={"url": VALID_URL})
+    assert resp.status_code == 404
+
+
+def test_summarize_truncated_article_502(monkeypatch):
+    # Claude hits the output cap → generate_article raises → 502, not a partial 200.
+    monkeypatch.setattr(
+        t_mod, "YouTubeTranscriptApi",
+        _fake_api(snippets=[SimpleNamespace(text="some sermon content")]),
+    )
+    monkeypatch.setattr(sum_mod, "_get_client", _fake_claude("cut off mid-", stop_reason="max_tokens"))
+    resp = client.post("/summarize", json={"url": VALID_URL})
+    assert resp.status_code == 502
+
+
+def _claude_raises(exc):
+    """Patch summarizer._get_client so the Claude call raises `exc`."""
+
+    class _Msgs:
+        def create(self, **kwargs):
+            raise exc
+
+    class _Client:
+        messages = _Msgs()
+
+    return lambda: _Client()
+
+
+# Each Claude failure class maps to a specific HTTP code. Without these tests, a
+# catch-order or mapping regression (e.g. 429 silently downgraded to 502) is invisible.
+_REQ = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+CLAUDE_ERROR_STATUS = [
+    (anthropic.RateLimitError("rl", response=httpx.Response(429, request=_REQ), body=None), 429),
+    (anthropic.APIConnectionError(message="boom", request=_REQ), 503),
+    (anthropic.APIStatusError("err", response=httpx.Response(500, request=_REQ), body=None), 502),
+    # APIResponseValidationError subclasses APIError but NOT APIStatusError — the
+    # case that previously escaped to a raw 500; the catch-all now maps it to 502.
+    (anthropic.APIResponseValidationError(response=httpx.Response(200, request=_REQ), body=None), 502),
+]
+
+
+def test_summarize_claude_errors_mapped(monkeypatch):
+    for exc, expected in CLAUDE_ERROR_STATUS:
+        monkeypatch.setattr(
+            t_mod, "YouTubeTranscriptApi",
+            _fake_api(snippets=[SimpleNamespace(text="some sermon content")]),
+        )
+        monkeypatch.setattr(sum_mod, "_get_client", _claude_raises(exc))
+        resp = client.post("/summarize", json={"url": VALID_URL})
+        assert resp.status_code == expected, (
+            f"{type(exc).__name__}: got {resp.status_code}, expected {expected}"
+        )
