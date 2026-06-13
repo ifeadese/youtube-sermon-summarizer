@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { generateArticle } from "./api.js";
 import "./App.css";
@@ -15,8 +15,11 @@ export default function App() {
   // presses before the disabled button re-renders — can't fire a duplicate,
   // billed /summarize call.
   const inFlight = useRef(false);
-  // Tracks the "Copied!" reset timer so we can clear it on a re-copy/unmount.
+  // Tracks the "Copied!" reset timer so we can clear it on a re-copy or unmount.
   const copyTimer = useRef(null);
+
+  // Clear any pending "Copied!" reset timer when the component unmounts.
+  useEffect(() => () => clearTimeout(copyTimer.current), []);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -39,6 +42,7 @@ export default function App() {
   async function handleCopy() {
     try {
       await navigator.clipboard.writeText(article);
+      setError(""); // clear any stale copy error from a previous failed attempt
       setCopied(true);
       clearTimeout(copyTimer.current);
       copyTimer.current = setTimeout(() => setCopied(false), 2000);
@@ -89,6 +93,9 @@ export default function App() {
             <button type="button" className="copy-btn" onClick={handleCopy}>
               {copied ? "Copied!" : "Copy Article"}
             </button>
+            <span className="visually-hidden" aria-live="polite">
+              {copied ? "Article copied to clipboard" : ""}
+            </span>
           </div>
           <article className="article" aria-label="Generated article">
             {article}
