@@ -7,6 +7,9 @@ message, so the API routes don't need to know the library's internals. The
 transcript and summarize endpoints both reuse `fetch_transcript`.
 """
 
+import logging
+import os
+
 import requests
 
 from youtube_transcript_api import (
@@ -20,6 +23,7 @@ from youtube_transcript_api import (
     VideoUnplayable,
     YouTubeTranscriptApi,
 )
+from youtube_transcript_api.proxies import GenericProxyConfig, WebshareProxyConfig
 
 
 class TranscriptError(Exception):
@@ -29,6 +33,38 @@ class TranscriptError(Exception):
         super().__init__(detail)
         self.status_code = status_code
         self.detail = detail
+
+
+def _proxy_config():
+    """Build a proxy config from the environment, or None if none is set.
+
+    YouTube blocks transcript requests from datacenter IPs, so production
+    deployments need a residential proxy. This is off by default — local/
+    residential dev needs no proxy — and activates only when the relevant env
+    vars are present:
+
+      - Webshare:  WEBSHARE_PROXY_USERNAME + WEBSHARE_PROXY_PASSWORD
+      - Generic:   PROXY_HTTP_URL and/or PROXY_HTTPS_URL
+    """
+    ws_user = os.environ.get("WEBSHARE_PROXY_USERNAME")
+    ws_pass = os.environ.get("WEBSHARE_PROXY_PASSWORD")
+    if ws_user and ws_pass:
+        return WebshareProxyConfig(proxy_username=ws_user, proxy_password=ws_pass)
+    if bool(ws_user) != bool(ws_pass):
+        # Only one of the pair set — almost certainly a misconfiguration. Warn
+        # loudly; otherwise the proxy is silently skipped and transcript fetches
+        # fail in prod with an opaque "blocked" error.
+        logging.warning(
+            "Partial Webshare proxy config: set BOTH WEBSHARE_PROXY_USERNAME and "
+            "WEBSHARE_PROXY_PASSWORD. Proceeding without a proxy."
+        )
+
+    http_url = os.environ.get("PROXY_HTTP_URL")
+    https_url = os.environ.get("PROXY_HTTPS_URL")
+    if http_url or https_url:
+        return GenericProxyConfig(http_url=http_url, https_url=https_url or http_url)
+
+    return None
 
 
 def fetch_transcript(video_id: str) -> str:
@@ -41,7 +77,9 @@ def fetch_transcript(video_id: str) -> str:
         # A fresh client per call: YouTubeTranscriptApi owns a requests.Session
         # and is explicitly *not* thread-safe, while FastAPI runs sync routes in
         # a threadpool. The per-call cost is negligible at pilot volume.
-        fetched = YouTubeTranscriptApi().fetch(video_id, languages=["en"])
+        fetched = YouTubeTranscriptApi(proxy_config=_proxy_config()).fetch(
+            video_id, languages=["en"]
+        )
     except VideoUnavailable:
         raise TranscriptError(403, "This video is private or unavailable.")
     except VideoUnplayable:

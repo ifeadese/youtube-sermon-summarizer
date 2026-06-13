@@ -52,3 +52,20 @@ npm run lint       # ESLint (flat config) over src/
 
 Node `^20.19.0 || >=22.12.0` (pinned in `package.json` `engines`, matching the
 Vite 8 toolchain).
+
+## Deploy (Vercel)
+
+The frontend deploys to Vercel from the **same repo** as the backend — point
+the project at the `frontend/` subdirectory.
+
+1. New Vercel project → import this GitHub repo.
+2. Set **Root Directory = `frontend`**. Vercel auto-detects the Vite preset
+   (build `npm run build`, output `dist/`).
+3. Add the environment variable **`VITE_API_BASE_URL`** = your deployed backend
+   URL (e.g. `https://your-backend.up.railway.app`). It's baked in at build
+   time, so redeploy after changing it.
+4. Back on the backend, set `ALLOWED_ORIGINS` to this app's Vercel URL so CORS
+   permits the calls.
+
+> Optional: set an "Ignored Build Step" so Vercel only rebuilds when `frontend/`
+> changed, not on backend-only commits.

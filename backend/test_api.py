@@ -31,6 +31,9 @@ def _fake_api(*, snippets=None, raises=None):
     """Build a stand-in YouTubeTranscriptApi class whose .fetch is controlled."""
 
     class _FakeApi:
+        def __init__(self, proxy_config=None):
+            self.proxy_config = proxy_config
+
         def fetch(self, video_id, languages=None):
             if raises is not None:
                 raise raises

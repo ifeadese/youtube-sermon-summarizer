@@ -1,0 +1,8 @@
+# Railway/Nixpacks build config.
+# `"..."` keeps the provider's auto-generated install commands (which create and
+# activate the Python virtualenv and install requirements.txt), then we add a
+# lockfile install in that same venv so the deployed environment is fully
+# reproducible (transitive deps can't drift). Without the `"..."`, this phase
+# would REPLACE the provider commands and lose the venv setup.
+[phases.install]
+cmds = ["...", "pip install -r requirements.lock"]
