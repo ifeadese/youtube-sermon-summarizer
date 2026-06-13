@@ -105,3 +105,24 @@ cd backend
 The pure-logic tests also run without pytest: `python test_utils.py`,
 `python test_transcript.py`. The HTTP-contract tests (`test_api.py`) need
 pytest + httpx.
+
+## Dependencies
+
+Two files, mirroring the frontend's `package.json` + `package-lock.json`:
+
+- **`requirements.txt`** — the human-readable manifest: the direct runtime deps,
+  each pinned to an exact version. Edit this when adding/bumping a dep.
+- **`requirements.lock`** — a full freeze (direct **and** transitive deps) for a
+  reproducible install. The deploy build installs from this so transitive
+  versions can't drift between environments. Generated, not hand-edited.
+
+**To change a dependency:** edit `requirements.txt`, then regenerate the lock:
+
+```bash
+python3 -m venv /tmp/lock
+/tmp/lock/bin/pip install -r requirements.txt
+/tmp/lock/bin/pip freeze --exclude-editable > requirements.lock
+```
+
+Local dev installing `requirements.txt` is fine; use `requirements.lock` when
+you need the exact reproducible set (CI / debugging an env-specific issue).
