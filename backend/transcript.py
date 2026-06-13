@@ -25,6 +25,8 @@ from youtube_transcript_api import (
 )
 from youtube_transcript_api.proxies import GenericProxyConfig, WebshareProxyConfig
 
+logger = logging.getLogger(__name__)
+
 
 class TranscriptError(Exception):
     """A transcript fetch failure with an HTTP status code and friendly detail."""
@@ -54,7 +56,7 @@ def _proxy_config():
         # Only one of the pair set — almost certainly a misconfiguration. Warn
         # loudly; otherwise the proxy is silently skipped and transcript fetches
         # fail in prod with an opaque "blocked" error.
-        logging.warning(
+        logger.warning(
             "Partial Webshare proxy config: set BOTH WEBSHARE_PROXY_USERNAME and "
             "WEBSHARE_PROXY_PASSWORD. Proceeding without a proxy."
         )
@@ -90,7 +92,10 @@ def fetch_transcript(video_id: str) -> str:
         raise TranscriptError(404, "No transcript available for this video.")
     except NoTranscriptFound:
         raise TranscriptError(404, "No English transcript is available for this video.")
-    except RequestBlocked:  # also covers IpBlocked (a subclass)
+    except RequestBlocked as exc:  # also covers IpBlocked (a subclass)
+        # Log the real cause: YouTube blocked the IP (usually: missing/invalid
+        # proxy in prod, since datacenter IPs are blocked).
+        logger.warning("Transcript blocked for %s (IP/proxy): %r", video_id, exc)
         raise TranscriptError(
             503,
             "Transcript service is temporarily unavailable (YouTube blocked the "
@@ -98,11 +103,16 @@ def fetch_transcript(video_id: str) -> str:
         )
     except InvalidVideoId:
         raise TranscriptError(400, "That doesn't look like a valid YouTube video.")
-    except CouldNotRetrieveTranscript:  # catch-all for remaining library errors
+    except CouldNotRetrieveTranscript as exc:  # catch-all for remaining library errors
+        logger.warning("Transcript retrieval failed for %s: %r", video_id, exc)
         raise TranscriptError(502, "Could not retrieve the transcript for this video.")
-    except requests.exceptions.RequestException:
-        # Transport-level failure (DNS, timeout, connection reset) raised by the
-        # underlying session before any HTTP response — the library does not wrap these.
+    except requests.exceptions.RequestException as exc:
+        # Transport-level failure (proxy auth/connection error, DNS, timeout,
+        # connection reset) raised by the underlying session before any HTTP
+        # response — the library does not wrap these. This is the branch that
+        # made the "mystery 503" opaque; log the real exception (e.g. a 407
+        # ProxyError from bad proxy creds).
+        logger.warning("Transcript transport error for %s (proxy/connection): %r", video_id, exc)
         raise TranscriptError(503, "Could not reach YouTube to fetch the transcript. Try again later.")
 
     text = " ".join(snippet.text for snippet in fetched).strip()

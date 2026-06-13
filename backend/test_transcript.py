@@ -240,6 +240,30 @@ def test_proxy_config_is_forwarded_to_the_client():
         restore_env()
 
 
+def test_opaque_failure_is_logged():
+    """A blocked/transport failure must log the real cause (not just 503)."""
+    recorded = []
+
+    class _FakeLogger:
+        def warning(self, *args, **kwargs):
+            recorded.append(args)
+
+    orig_logger = t_mod.logger
+    orig_cls = _install_fetch(_raises(RequestBlocked(VID)))
+    t_mod.logger = _FakeLogger()
+    try:
+        try:
+            fetch_transcript(VID)
+        except TranscriptError:
+            pass
+        assert recorded, "expected a warning log when a transcript fetch is blocked"
+        # the video id should be in the logged args for traceability
+        assert any(VID in a for a in recorded[0] if isinstance(a, str))
+    finally:
+        t_mod.YouTubeTranscriptApi = orig_cls
+        t_mod.logger = orig_logger
+
+
 def test_route_propagates_transcript_error_status():
     original = _install_fetch(_raises(TranscriptsDisabled(VID)))
     try:
