@@ -6,6 +6,7 @@ finished article in one call.
 """
 
 import os
+from pathlib import Path
 
 import anthropic
 from dotenv import load_dotenv
@@ -17,9 +18,11 @@ from summarizer import generate_article
 from transcript import TranscriptError, fetch_transcript
 from utils import extract_video_id
 
-# Load a local backend/.env for `uvicorn main:app` runs. In production the host
-# (e.g. Railway) sets real env vars and there is no .env file, so this is a no-op.
-load_dotenv()
+# Load backend/.env for local `uvicorn main:app` runs, anchored to this file's
+# directory so it works regardless of the current working directory. In
+# production the host (e.g. Railway) sets real env vars and there is no .env
+# file, so this is a no-op.
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
 app = FastAPI(title="YouTube Sermon Summarizer")
 

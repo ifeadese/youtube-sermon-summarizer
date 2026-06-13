@@ -7,7 +7,7 @@ FastAPI server for the sermon summarizer. All commands below are run **from this
 Do all of this **on your own machine, with your own Anthropic account.**
 
 1. **Prerequisites**
-   - Python 3.11+
+   - Python 3.11+ (the pinned deps are tested on **3.13**, which the deploy uses — see `.python-version`)
    - A personal Anthropic developer-API account with **prepaid credits** loaded
      ([console.anthropic.com](https://console.anthropic.com)) — this is the
      pay-as-you-go API, **not** a Claude.ai Pro/Max chat subscription. A key with

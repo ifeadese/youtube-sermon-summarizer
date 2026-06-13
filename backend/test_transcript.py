@@ -218,6 +218,28 @@ def test_proxy_config_generic_when_url_set():
         restore()
 
 
+def test_proxy_config_is_forwarded_to_the_client():
+    """fetch_transcript must pass _proxy_config()'s result into the API client."""
+    captured = {}
+
+    class _RecordingApi:
+        def __init__(self, proxy_config=None):
+            captured["proxy_config"] = proxy_config
+
+        def fetch(self, video_id, languages=None):
+            return _snippets("hi")
+
+    original_cls = t_mod.YouTubeTranscriptApi
+    restore_env = _with_env(WEBSHARE_PROXY_USERNAME="u", WEBSHARE_PROXY_PASSWORD="p")
+    t_mod.YouTubeTranscriptApi = _RecordingApi
+    try:
+        fetch_transcript(VID)
+        assert isinstance(captured["proxy_config"], WebshareProxyConfig)
+    finally:
+        t_mod.YouTubeTranscriptApi = original_cls
+        restore_env()
+
+
 def test_route_propagates_transcript_error_status():
     original = _install_fetch(_raises(TranscriptsDisabled(VID)))
     try:

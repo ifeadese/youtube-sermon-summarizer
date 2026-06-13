@@ -7,6 +7,7 @@ message, so the API routes don't need to know the library's internals. The
 transcript and summarize endpoints both reuse `fetch_transcript`.
 """
 
+import logging
 import os
 
 import requests
@@ -49,6 +50,14 @@ def _proxy_config():
     ws_pass = os.environ.get("WEBSHARE_PROXY_PASSWORD")
     if ws_user and ws_pass:
         return WebshareProxyConfig(proxy_username=ws_user, proxy_password=ws_pass)
+    if bool(ws_user) != bool(ws_pass):
+        # Only one of the pair set — almost certainly a misconfiguration. Warn
+        # loudly; otherwise the proxy is silently skipped and transcript fetches
+        # fail in prod with an opaque "blocked" error.
+        logging.warning(
+            "Partial Webshare proxy config: set BOTH WEBSHARE_PROXY_USERNAME and "
+            "WEBSHARE_PROXY_PASSWORD. Proceeding without a proxy."
+        )
 
     http_url = os.environ.get("PROXY_HTTP_URL")
     https_url = os.environ.get("PROXY_HTTPS_URL")
