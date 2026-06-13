@@ -26,3 +26,24 @@ allows by default).
 npm run build      # outputs static files to dist/
 npm run preview    # serve the production build locally
 ```
+
+## Tests
+
+```bash
+npm test           # run the Vitest suite once
+npm run test:watch # re-run on change
+```
+
+Tests use Vitest + React Testing Library (jsdom). The current smoke test asserts
+the app heading renders; component tests grow alongside the UI in Issue #9.
+
+## Lint
+
+```bash
+npm run lint       # ESLint (flat config) over src/
+```
+
+## Requirements
+
+Node `^20.19.0 || >=22.12.0` (pinned in `package.json` `engines`, matching the
+Vite 8 toolchain).
