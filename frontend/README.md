@@ -1,13 +1,15 @@
 # Frontend — YouTube Sermon Summarizer
 
-A single-page React app (built with Vite). Currently the app shell; the input
-form and API wiring arrive in Issue #9.
+A single-page React app (built with Vite): paste a YouTube URL, click Generate,
+and the article from the backend's `/summarize` endpoint renders below.
 
 ## Setup
 
 ```bash
 cd frontend
 npm install
+cp .env.example .env   # optional — override VITE_API_BASE_URL if the backend
+                       # isn't on http://localhost:8000
 ```
 
 ## Run
@@ -18,7 +20,8 @@ npm run dev
 ```
 
 Vite serves the app on `http://localhost:5173` (the origin the backend's CORS
-allows by default).
+allows by default). The backend must be running for Generate to work — see
+`../backend/README.md`.
 
 ## Build
 
@@ -34,8 +37,10 @@ npm test           # run the Vitest suite once
 npm run test:watch # re-run on change
 ```
 
-Tests use Vitest + React Testing Library (jsdom). The current smoke test asserts
-the app heading renders; component tests grow alongside the UI in Issue #9.
+Tests use Vitest + React Testing Library (jsdom), with `fetch` mocked (no
+network). They cover the heading, the form lifecycle (loading/disabled), success
+rendering, and the error paths — backend error, network failure, timeout,
+malformed success payload, and the double-submit guard.
 
 ## Lint
 
