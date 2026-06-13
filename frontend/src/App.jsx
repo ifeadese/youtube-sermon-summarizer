@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { generateArticle } from "./api.js";
 import "./App.css";
@@ -9,8 +9,16 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  // In-flight guard. A ref updates synchronously (unlike `loading` state, which
+  // is stale within the same render), so a rapid second submit — e.g. two Enter
+  // presses before the disabled button re-renders — can't fire a duplicate,
+  // billed /summarize call.
+  const inFlight = useRef(false);
+
   async function handleSubmit(event) {
     event.preventDefault();
+    if (inFlight.current) return;
+    inFlight.current = true;
     setLoading(true);
     setError("");
     setArticle("");
@@ -20,6 +28,7 @@ export default function App() {
       setError(err.message);
     } finally {
       setLoading(false);
+      inFlight.current = false;
     }
   }
 
