@@ -8,6 +8,7 @@ finished article in one call.
 import os
 
 import anthropic
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -15,6 +16,10 @@ from pydantic import BaseModel
 from summarizer import generate_article
 from transcript import TranscriptError, fetch_transcript
 from utils import extract_video_id
+
+# Load a local backend/.env for `uvicorn main:app` runs. In production the host
+# (e.g. Railway) sets real env vars and there is no .env file, so this is a no-op.
+load_dotenv()
 
 app = FastAPI(title="YouTube Sermon Summarizer")
 

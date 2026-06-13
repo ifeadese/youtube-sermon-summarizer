@@ -1,0 +1,5 @@
+# Railway/Nixpacks build config. Install from the fully-pinned lock (not the
+# readable requirements.txt) so the deployed environment is reproducible and
+# transitive deps can't drift. See requirements.lock / README → Dependencies.
+[phases.install]
+cmds = ["pip install -r requirements.lock"]

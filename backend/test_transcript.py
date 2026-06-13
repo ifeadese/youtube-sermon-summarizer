@@ -7,6 +7,7 @@ Run standalone:  python test_transcript.py
 Or with pytest:  pytest test_transcript.py
 """
 
+import os
 from types import SimpleNamespace
 
 import requests
@@ -15,6 +16,7 @@ from fastapi import HTTPException
 import transcript as t_mod
 from main import URLRequest, transcript as transcript_route
 from transcript import TranscriptError, fetch_transcript
+from youtube_transcript_api.proxies import GenericProxyConfig, WebshareProxyConfig
 from youtube_transcript_api import (
     AgeRestricted,
     CouldNotRetrieveTranscript,
@@ -62,6 +64,9 @@ def _install_fetch(func):
     original = t_mod.YouTubeTranscriptApi
 
     class _FakeApi:
+        def __init__(self, proxy_config=None):
+            self.proxy_config = proxy_config
+
         def fetch(self, video_id, languages=None):
             return func(video_id, languages=languages)
 
@@ -159,6 +164,58 @@ def test_route_invalid_url_is_400():
         assert err.status_code == 400
     else:
         raise AssertionError("expected HTTPException 400 for invalid URL")
+
+
+_PROXY_ENV_KEYS = (
+    "WEBSHARE_PROXY_USERNAME",
+    "WEBSHARE_PROXY_PASSWORD",
+    "PROXY_HTTP_URL",
+    "PROXY_HTTPS_URL",
+)
+
+
+def _with_env(**values):
+    """Set the given env vars (others among the proxy keys cleared); returns a
+    restore() to put the environment back. Keeps the standalone runner working
+    without pytest fixtures."""
+    saved = {k: os.environ.get(k) for k in _PROXY_ENV_KEYS}
+    for k in _PROXY_ENV_KEYS:
+        os.environ.pop(k, None)
+    for k, v in values.items():
+        os.environ[k] = v
+
+    def restore():
+        for k, v in saved.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+    return restore
+
+
+def test_proxy_config_none_when_unset():
+    restore = _with_env()
+    try:
+        assert t_mod._proxy_config() is None
+    finally:
+        restore()
+
+
+def test_proxy_config_webshare_when_creds_set():
+    restore = _with_env(WEBSHARE_PROXY_USERNAME="u", WEBSHARE_PROXY_PASSWORD="p")
+    try:
+        assert isinstance(t_mod._proxy_config(), WebshareProxyConfig)
+    finally:
+        restore()
+
+
+def test_proxy_config_generic_when_url_set():
+    restore = _with_env(PROXY_HTTP_URL="http://user:pass@proxy.example.com:8080")
+    try:
+        assert isinstance(t_mod._proxy_config(), GenericProxyConfig)
+    finally:
+        restore()
 
 
 def test_route_propagates_transcript_error_status():
