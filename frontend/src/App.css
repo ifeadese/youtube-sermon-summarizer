@@ -1,11 +1,12 @@
 .app {
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  max-width: 44rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 4rem;
+}
+
+.header {
   text-align: center;
-  padding: 2rem;
+  margin-bottom: 2rem;
 }
 
 .app h1 {
@@ -16,5 +17,66 @@
 .tagline {
   color: #555;
   margin: 0;
-  max-width: 32rem;
+}
+
+.form {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.url-input {
+  flex: 1 1 20rem;
+  padding: 0.7rem 0.9rem;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+}
+
+.url-input:focus {
+  outline: 2px solid #1a1a1a;
+  outline-offset: 1px;
+  border-color: #1a1a1a;
+}
+
+.generate-btn {
+  padding: 0.7rem 1.2rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+  background: #1a1a1a;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.generate-btn:disabled {
+  background: #999;
+  cursor: not-allowed;
+}
+
+.status {
+  margin-top: 1.5rem;
+  color: #555;
+}
+
+.error {
+  margin-top: 1.5rem;
+  padding: 0.8rem 1rem;
+  color: #8a1f1f;
+  background: #fdecea;
+  border: 1px solid #f5c2c0;
+  border-radius: 8px;
+}
+
+.article {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 10px;
+  /* Preserve the plain-text paragraph/heading line breaks from the API. */
+  white-space: pre-wrap;
+  line-height: 1.7;
+  font-size: 1.05rem;
 }
