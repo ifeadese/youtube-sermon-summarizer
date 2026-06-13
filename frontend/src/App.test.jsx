@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 
 import App from "./App.jsx";
 
@@ -174,6 +174,77 @@ describe("App", () => {
 
     await screen.findByLabelText("Generated article");
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
-    expect(screen.getByRole("button")).toBeEnabled();
+    // After completion both Generate and Copy buttons exist — target Generate.
+    expect(screen.getByRole("button", { name: "Generate Article" })).toBeEnabled();
+  });
+});
+
+describe("Copy button", () => {
+  const ARTICLE = "My Title\n\nThe full article body.";
+
+  function mockClipboard(writeText) {
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText },
+      configurable: true,
+      writable: true,
+    });
+  }
+
+  async function renderWithArticle() {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ article: ARTICLE }) }),
+    );
+    render(<App />);
+    fireEvent.change(screen.getByLabelText("YouTube URL"), {
+      target: { value: "https://youtu.be/dQw4w9WgXcQ" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Generate Article" }));
+    await screen.findByLabelText("Generated article");
+  }
+
+  it("is not shown before an article exists, and appears after", async () => {
+    render(<App />);
+    expect(screen.queryByRole("button", { name: /copy article/i })).not.toBeInTheDocument();
+    // (cleanup of this render happens in afterEach)
+  });
+
+  it("copies the full article text and shows 'Copied!'", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    mockClipboard(writeText);
+    await renderWithArticle();
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy Article" }));
+
+    expect(await screen.findByRole("button", { name: "Copied!" })).toBeInTheDocument();
+    expect(writeText).toHaveBeenCalledWith(ARTICLE);
+  });
+
+  it("reverts to 'Copy Article' after 2 seconds", async () => {
+    mockClipboard(vi.fn().mockResolvedValue(undefined));
+    await renderWithArticle();
+
+    vi.useFakeTimers();
+    try {
+      fireEvent.click(screen.getByRole("button", { name: "Copy Article" }));
+      await act(async () => {}); // flush the writeText resolution → setCopied(true)
+      expect(screen.getByRole("button", { name: "Copied!" })).toBeInTheDocument();
+
+      act(() => vi.advanceTimersByTime(2000));
+      expect(screen.getByRole("button", { name: "Copy Article" })).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("shows a friendly error if clipboard write fails", async () => {
+    mockClipboard(vi.fn().mockRejectedValue(new Error("denied")));
+    await renderWithArticle();
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy Article" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("copy");
+    // The article is still there to copy manually.
+    expect(screen.getByLabelText("Generated article")).toBeInTheDocument();
   });
 });

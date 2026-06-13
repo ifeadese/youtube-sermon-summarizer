@@ -8,12 +8,15 @@ export default function App() {
   const [article, setArticle] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [copied, setCopied] = useState(false);
 
   // In-flight guard. A ref updates synchronously (unlike `loading` state, which
   // is stale within the same render), so a rapid second submit — e.g. two Enter
   // presses before the disabled button re-renders — can't fire a duplicate,
   // billed /summarize call.
   const inFlight = useRef(false);
+  // Tracks the "Copied!" reset timer so we can clear it on a re-copy/unmount.
+  const copyTimer = useRef(null);
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -22,6 +25,7 @@ export default function App() {
     setLoading(true);
     setError("");
     setArticle("");
+    setCopied(false);
     try {
       setArticle(await generateArticle(url.trim()));
     } catch (err) {
@@ -29,6 +33,17 @@ export default function App() {
     } finally {
       setLoading(false);
       inFlight.current = false;
+    }
+  }
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(article);
+      setCopied(true);
+      clearTimeout(copyTimer.current);
+      copyTimer.current = setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setError("Couldn't copy to the clipboard — please select and copy the text manually.");
     }
   }
 
@@ -69,9 +84,16 @@ export default function App() {
       )}
 
       {article && (
-        <article className="article" aria-label="Generated article">
-          {article}
-        </article>
+        <section className="result">
+          <div className="result-bar">
+            <button type="button" className="copy-btn" onClick={handleCopy}>
+              {copied ? "Copied!" : "Copy Article"}
+            </button>
+          </div>
+          <article className="article" aria-label="Generated article">
+            {article}
+          </article>
+        </section>
       )}
     </main>
   );
