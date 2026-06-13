@@ -13,6 +13,7 @@ Product thinking doc • June 2026
 - [Tech Stack](#tech-stack)
 - [Engineering Philosophy](#engineering-philosophy)
 - [Long-Term Vision](#long-term-vision)
+- [Phase 2 (Post-MVP): Content Summarizer Evolution](#phase-2-post-mvp-content-summarizer-evolution)
 - [MVP Roadmap & Milestones](#mvp-roadmap--milestones)
   - [Milestone 1: Backend Foundation](#milestone-1-backend-foundation)
   - [Milestone 2: AI Integration](#milestone-2-ai-integration)
@@ -84,6 +85,50 @@ No login system. No database. No fluff. Just the pipeline — in one screen.
 ## Long-Term Vision
 
 Build only what is necessary. Build more only as demand or evidence of need becomes clear. Think of this as a pilot — validate with one church (yours), then expand. Future additions could include multi-church accounts, scheduling and auto-posting to Squarespace, sermon series tagging, and SEO optimization hints — but none of that until the core is proven.
+
+## Phase 2 (Post-MVP): Content Summarizer Evolution
+
+> **Status: not in MVP scope.** The MVP ships exactly as described above — sermon-first, a single locked, well-engineered prompt behind `/summarize`. Everything in this section is deferred until the MVP is proven against the evidence gates below. It's recorded now only so the MVP stays compatible with it: the single `/summarize` entry point can later route to multiple strategies without a rewrite.
+
+Once the MVP is validated, evolve from "sermon summarizer" toward a general **content summarizer** — keeping church content as the highest-quality default while making the backend domain-agnostic.
+
+### Why evolve
+
+- The same pipeline that summarizes a sermon can summarize other long-form spoken content; the bottleneck is output-quality control, not the domain.
+- A domain-agnostic backend lets us expand without a rewrite.
+
+### Quality model: multi-stage pipeline
+
+Replace the MVP's single locked prompt with a quality-focused pipeline: **topic detection → outline → draft → rewrite pass.** The guiding idea shifts from "prompt is the product" to "quality is the product" — prompting still matters, but quality comes from staging plus evaluation.
+
+### Topic detection (routing + quality control, not a flashy feature)
+
+When a user pastes a URL:
+
+1. Read metadata + the first part of the transcript.
+2. Classify content type with confidence (start small: `sermon`, `church-announcement`, `testimony`, `other`).
+3. High confidence → route to the matching article template.
+4. Low confidence → safe default template + a "detected topic may be inaccurate" notice.
+5. Store detection + user corrections for future tuning.
+
+Implementation boundary: lightweight model-based classification (no ML training), a deliberately small label set, a manual UI override ("Use sermon style" / "Use neutral educative style"), and an evaluation log reviewed weekly.
+
+### Evolution path
+
+- **Stage 1** — church/preacher content (high quality, repeatable, low ambiguity) — *this is the MVP*
+- **Stage 2** — broader educational YouTube content
+- **Stage 3** — generic YouTube content, profiled by topic type
+
+Future additions: multi-church accounts, scheduling and auto-posting to Squarespace/WordPress/blog APIs, sermon series tagging, SEO hints.
+
+### Evidence gates (must hold before expanding beyond church-first)
+
+Expand public scope only when all are consistently true over a meaningful sample:
+
+- ≥80% of outputs need only minor edits.
+- Average URL-paste → publish-ready article time is under 10 minutes.
+- Factual drift / hallucination rate stays below the quality threshold.
+- Detection confidence and user-override rate are stable.
 
 ## TL;DR
 
