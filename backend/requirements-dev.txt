@@ -1,2 +1,4 @@
+# Test-only dependencies (not needed to run the app).
+# Install with: pip install -r requirements-dev.txt
 pytest==9.0.3
 httpx==0.28.1
