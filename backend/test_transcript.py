@@ -240,6 +240,55 @@ def test_proxy_config_is_forwarded_to_the_client():
         restore_env()
 
 
+def _capture_log_on_failure(exc):
+    """Run fetch_transcript with a fake that raises `exc`; return the single
+    formatted warning string the code logged (or "" if none)."""
+    recorded = []
+
+    class _FakeLogger:
+        def warning(self, msg, *args, **kwargs):
+            recorded.append(msg % args if args else msg)
+
+    orig_logger = t_mod.logger
+    orig_cls = _install_fetch(_raises(exc))
+    t_mod.logger = _FakeLogger()
+    try:
+        try:
+            fetch_transcript(VID)
+        except TranscriptError:
+            pass
+    finally:
+        t_mod.YouTubeTranscriptApi = orig_cls
+        t_mod.logger = orig_logger
+    return recorded[0] if recorded else ""
+
+
+def test_opaque_failures_are_logged_with_cause():
+    """Each opaque branch must log a warning carrying the video id AND the
+    underlying exception cause (so the failure isn't a mystery)."""
+    for exc in (
+        RequestBlocked(VID),
+        CouldNotRetrieveTranscript(VID),
+        requests.exceptions.ConnectionError("boom"),
+    ):
+        logged = _capture_log_on_failure(exc)
+        assert logged, f"expected a warning for {type(exc).__name__}"
+        assert VID in logged, f"video id missing for {type(exc).__name__}"
+        # the exception type is the 'cause' — must be present, not just the id
+        assert type(exc).__name__ in logged, f"cause missing for {type(exc).__name__}"
+
+
+def test_proxy_credentials_are_redacted_in_logs():
+    """A malformed proxy URL leaks creds via repr() — they must be redacted."""
+    leaky = requests.exceptions.InvalidURL(
+        "Failed to parse: http://myuser:SECRETpass@host:8080/"
+    )
+    logged = _capture_log_on_failure(leaky)
+    assert logged, "expected a warning for the transport error"
+    assert "SECRETpass" not in logged and "myuser" not in logged
+    assert "***" in logged
+
+
 def test_route_propagates_transcript_error_status():
     original = _install_fetch(_raises(TranscriptsDisabled(VID)))
     try:
