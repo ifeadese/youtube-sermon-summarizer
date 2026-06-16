@@ -346,6 +346,9 @@ describe("Footer", () => {
     render(<App />);
     const footer = screen.getByRole("contentinfo");
     expect(within(footer).getByText(/© 2026 Sermon Summarizer. All rights reserved./i)).toBeInTheDocument();
-    expect(within(footer).getByText(/Made by Ife Adese/i)).toBeInTheDocument();
+    expect(within(footer).getByText(/Made by/i)).toBeInTheDocument();
+    const link = within(footer).getByRole("link", { name: /Ife Adese/i });
+    expect(link).toBeInTheDocument();
+    expect(link.getAttribute("href")).toBe("https://ifeadese.com");
   });
 });

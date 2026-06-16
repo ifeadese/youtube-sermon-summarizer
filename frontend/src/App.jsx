@@ -179,7 +179,7 @@ export default function App() {
           &copy; 2026 {BRAND}. All rights reserved.
         </span>
         <span className="footer__credit">
-          Made by Ife Adese
+          Made by <a href="https://ifeadese.com" target="_blank" rel="noopener noreferrer">Ife Adese</a>
         </span>
       </footer>
     </div>

@@ -502,7 +502,19 @@
 .footer__credit {
   text-align: right;
   font-weight: 500;
+  color: var(--ink-muted);
+}
+
+.footer__credit a {
+  color: var(--gold-deep);
+  text-decoration: underline;
+  font-weight: 600;
+  transition: color 0.15s ease;
+}
+
+.footer__credit a:hover {
   color: var(--plum);
+  text-decoration: none;
 }
 
 /* ── Motion ──────────────────────────────────────────────────────────────── */
@@ -542,11 +554,21 @@
 @media (max-width: 34rem) {
   .form {
     flex-direction: column;
+    padding: 0.5rem;
+    gap: 0.5rem;
+  }
+
+  .field {
+    flex: 1 1 auto;
+  }
+
+  .url-input {
+    padding-block: 0.7rem;
   }
 
   .generate-btn {
     width: 100%;
-    padding-block: 0.95rem;
+    padding-block: 0.75rem;
   }
 
   .result-bar {
