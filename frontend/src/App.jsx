@@ -9,26 +9,7 @@ const BRAND = "Sermon Summarizer";
 // Placeholder until the real contact email is provided (issue #35). Swap before merge.
 const CONTACT_EMAIL = "hello@example.com";
 
-// A real, anonymized example reflection shown in the "Example" section.
-// PLACEHOLDER — replace with a maintainer-supplied real article (names scrubbed,
-// permission confirmed) before merge. Kept clearly illustrative until then.
-const EXAMPLE_ARTICLE = `Walking By Faith When the Path Is Unclear
 
-Hebrews 11:1
-
-There are seasons when we cannot see the next step, and yet we are still called to move. Faith is not the absence of uncertainty — it is trust that holds on when the outcome is hidden from us. Together we remember that the God who called us is faithful to finish what He started.
-
-Trusting the Voice That Called Us
-
-When we first sense God leading, it rarely comes with a full map. We are given enough light for the next step, and we learn that obedience often comes before understanding. As we walk, the path becomes clear — not before.
-
-Holding On Through the Waiting
-
-The waiting is where faith is formed. We are reminded that delay is not denial, and that what God has promised, He is able to perform. We encourage one another to keep going.
-
-A Closing Word
-
-So we press on together, confident that the One who began a good work in us will carry it to completion. May we walk by faith, and not by sight.`;
 
 export default function App() {
   const [url, setUrl] = useState("");
@@ -94,8 +75,6 @@ export default function App() {
           {BRAND}
         </a>
         <nav className="nav" aria-label="Primary">
-          <a href="#how">How it works</a>
-          <a href="#example">Example</a>
           <a href={`mailto:${CONTACT_EMAIL}`}>Contact</a>
         </nav>
       </header>
@@ -203,42 +182,7 @@ export default function App() {
         </div>
       </main>
 
-      <section className="section how" id="how" aria-labelledby="how-title">
-        <h2 id="how-title">How it works</h2>
-        <ol className="how__steps">
-          <li className="step">
-            <span className="step__num" aria-hidden="true">
-              1
-            </span>
-            <h3>Paste the link</h3>
-            <p>Drop in the YouTube URL of any sermon that has captions.</p>
-          </li>
-          <li className="step">
-            <span className="step__num" aria-hidden="true">
-              2
-            </span>
-            <h3>We write the article</h3>
-            <p>Claude turns the transcript into a clean, faithful reflection.</p>
-          </li>
-          <li className="step">
-            <span className="step__num" aria-hidden="true">
-              3
-            </span>
-            <h3>Copy it into your site</h3>
-            <p>Plain text that pastes straight into Squarespace or your blog.</p>
-          </li>
-        </ol>
-      </section>
 
-      <section className="section example" id="example" aria-labelledby="example-title">
-        <h2 id="example-title">Example</h2>
-        <p className="section__lead">A real reflection generated from a sermon (details anonymized).</p>
-        <div className="article-scroll article-scroll--example">
-          <article className="article" aria-label="Example article">
-            {EXAMPLE_ARTICLE}
-          </article>
-        </div>
-      </section>
 
       <footer className="footer">
         <p className="footer__attr">Made for churches and ministries.</p>
