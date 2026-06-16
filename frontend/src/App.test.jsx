@@ -342,13 +342,10 @@ describe("Top nav", () => {
 });
 
 describe("Footer", () => {
-  it("renders the footer with attribution, a legible pilot note, and the privacy line", () => {
+  it("renders the footer with copyright and creator credit", () => {
     render(<App />);
-    // Scope to the footer — "Made for churches and ministries" also appears in
-    // the hero sub-line, so an unscoped getByText would match twice.
     const footer = screen.getByRole("contentinfo");
-    expect(within(footer).getByText(/Made for churches and ministries/i)).toBeInTheDocument();
-    expect(within(footer).getByText(/Early pilot/i)).toBeInTheDocument();
-    expect(within(footer).getByText(/aren.t stored/i)).toBeInTheDocument();
+    expect(within(footer).getByText(/© 2026 Sermon Summarizer. All rights reserved./i)).toBeInTheDocument();
+    expect(within(footer).getByText(/Made by Ife Adese/i)).toBeInTheDocument();
   });
 });

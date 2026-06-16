@@ -175,12 +175,12 @@ export default function App() {
 
 
       <footer className="footer">
-        <p className="footer__attr">Made for churches and ministries.</p>
-        <p className="footer__note">
-          <span className="footer__pilot">Early pilot</span> · Your links and
-          generated articles aren&apos;t stored ·{" "}
-          <a href={`mailto:${CONTACT_EMAIL}`}>Contact</a>
-        </p>
+        <span className="footer__copyright">
+          &copy; 2026 {BRAND}. All rights reserved.
+        </span>
+        <span className="footer__credit">
+          Made by Ife Adese
+        </span>
       </footer>
     </div>
   );
