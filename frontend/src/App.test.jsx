@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { render, screen, fireEvent, act, within } from "@testing-library/react";
 
 import App from "./App.jsx";
 
@@ -336,5 +336,78 @@ describe("Idle hint", () => {
 
     await screen.findByLabelText("Generated article");
     expect(screen.queryByText(HINT)).not.toBeInTheDocument();
+  });
+});
+
+describe("Top nav", () => {
+  it("renders the text logo and the essentials-only nav links", () => {
+    render(<App />);
+    expect(screen.getByRole("link", { name: /Sermon Summarizer home/i })).toBeInTheDocument();
+    const nav = screen.getByRole("navigation", { name: "Primary" });
+    expect(within(nav).getByRole("link", { name: "How it works" })).toHaveAttribute("href", "#how");
+    expect(within(nav).getByRole("link", { name: "Example" })).toHaveAttribute("href", "#example");
+  });
+
+  it("makes Contact a mailto link", () => {
+    render(<App />);
+    const nav = screen.getByRole("navigation", { name: "Primary" });
+    const contact = within(nav).getByRole("link", { name: "Contact" });
+    expect(contact.getAttribute("href")).toMatch(/^mailto:/);
+  });
+});
+
+describe("Product framing sections", () => {
+  function stubArticle(article = "My Title\n\nThe body.") {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ article }) }),
+    );
+  }
+
+  it("shows How it works and Example sections on first render", () => {
+    render(<App />);
+    expect(screen.getByRole("heading", { name: "How it works" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Example" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Example article")).toBeInTheDocument();
+  });
+
+  it("keeps the sections present after an article is generated (nav targets must persist)", async () => {
+    stubArticle();
+    render(<App />);
+    typeUrl();
+    clickGenerate();
+    await screen.findByLabelText("Generated article");
+
+    // Both sections remain so the nav anchors still resolve.
+    expect(screen.getByRole("heading", { name: "How it works" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Example" })).toBeInTheDocument();
+  });
+
+  it("uses a distinct aria-label for the Example vs the live result", async () => {
+    stubArticle();
+    const { container } = render(<App />);
+    // Example exists from the start with its own label.
+    expect(screen.getByLabelText("Example article")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Generated article")).not.toBeInTheDocument();
+
+    typeUrl();
+    clickGenerate();
+    const result = await screen.findByLabelText("Generated article");
+
+    // The two are distinct elements, and the live result sits in a fixed-height
+    // scroll container.
+    expect(result).not.toBe(screen.getByLabelText("Example article"));
+    expect(result.closest(".article-scroll")).toBeInTheDocument();
+    expect(container.querySelector(".article-scroll")).toBeInTheDocument();
+  });
+
+  it("renders the footer with attribution, a legible pilot note, and the privacy line", () => {
+    render(<App />);
+    // Scope to the footer — "Made for churches and ministries" also appears in
+    // the hero sub-line, so an unscoped getByText would match twice.
+    const footer = screen.getByRole("contentinfo");
+    expect(within(footer).getByText(/Made for churches and ministries/i)).toBeInTheDocument();
+    expect(within(footer).getByText(/Early pilot/i)).toBeInTheDocument();
+    expect(within(footer).getByText(/aren.t stored/i)).toBeInTheDocument();
   });
 });
