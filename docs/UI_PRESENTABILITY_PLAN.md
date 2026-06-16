@@ -146,3 +146,22 @@ and review trail stay discoverable.
   (c) responsive at small/mid/large widths; (d) keyboard/focus + reduced-motion intact.
 - **Plain-language read-through:** read all visitor-facing copy as a non-technical
   first-timer; confirm no jargon and that what/who/how land without explanation.
+
+## Addendum — layout additions (implementation)
+
+Added during implementation at the maintainer's request, on top of the approach above:
+
+- **Top bar** — a sticky bar with a **text logo** (left, working name "Sermon
+  Summarizer" until the #34 naming decision) and an essentials-only nav (right):
+  `How it works` and `Example` (smooth-scroll anchors) + `Contact` (`mailto:`).
+- **Centered hero** — the headline + form are centered on both axes in the space
+  below the top bar (app-like landing).
+- **Fixed-height output** — the generated article renders in a fixed-height,
+  vertically-scrollable container (`.article-scroll`) so a long article scrolls
+  *inside its box* instead of stretching the page. The meta + Copy bar stay pinned
+  above it. The form keeps its position; the result appears below it.
+- **Idle-gating revised** — because the nav anchors must always resolve, the
+  How-it-works and Example sections are now **always present** below the hero
+  (not idle-gated). Only the small in-hero *hint* line remains idle-gated. This
+  supersedes the original "idle-gate the sections" decision; it's safe now that
+  the fixed-height output no longer stretches the page.

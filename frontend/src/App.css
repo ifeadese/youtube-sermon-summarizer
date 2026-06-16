@@ -1,25 +1,87 @@
-/* ── Layout ──────────────────────────────────────────────────────────────── */
+/* ── Page shell ──────────────────────────────────────────────────────────── */
 .page {
   display: flex;
-  justify-content: center;
-  /* dvh tracks the *visible* viewport, avoiding the mobile-browser-chrome
-     overflow that plagues 100vh; vh is the fallback for older browsers. */
+  flex-direction: column;
   min-height: 100vh;
   min-height: 100dvh;
-  /* Generous on desktop, tightens automatically on phones via clamp(). */
-  padding: clamp(1.5rem, 5vw, 4.5rem) clamp(1rem, 4vw, 2rem) 3.5rem;
 }
 
-.app {
+/* ── Top bar: text logo + minimal nav ────────────────────────────────────── */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.25rem clamp(1rem, 4vw, 2rem);
+  background: #fff;
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45ch;
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: 1.1rem;
+  letter-spacing: -0.01em;
+  color: var(--plum-deep);
+  text-decoration: none;
+}
+
+.brand__mark {
+  color: var(--gold);
+  font-size: 0.95rem;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: clamp(0.75rem, 3vw, 1.5rem);
+}
+
+.nav a {
+  font-family: var(--font-sans);
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--ink-muted);
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 0.15s ease;
+}
+
+.nav a:hover {
+  color: var(--plum);
+}
+
+.nav a:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* ── Hero: form centered on both axes in the space below the top bar ─────── */
+.hero {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(2rem, 6vw, 4rem) clamp(1rem, 4vw, 2rem);
+}
+
+.hero__inner {
   width: 100%;
   max-width: 42rem;
   animation: rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-/* ── Header ──────────────────────────────────────────────────────────────── */
+/* ── Header block ────────────────────────────────────────────────────────── */
 .header {
   text-align: center;
-  margin-bottom: clamp(1.75rem, 4vw, 2.5rem);
+  margin-bottom: clamp(1.5rem, 4vw, 2.25rem);
 }
 
 .wordmark {
@@ -44,7 +106,8 @@
   line-height: 1;
 }
 
-.app h1 {
+.app h1,
+.header h1 {
   font-family: var(--font-serif);
   font-weight: 600;
   font-size: clamp(2.1rem, 6.5vw, 3.25rem);
@@ -61,6 +124,15 @@
   color: var(--ink-muted);
   font-size: clamp(1rem, 2.4vw, 1.12rem);
   line-height: 1.55;
+  text-wrap: balance;
+}
+
+.subhead {
+  margin: 0.6rem auto 0;
+  max-width: 30rem;
+  color: var(--ink-faint);
+  font-size: 0.95rem;
+  line-height: 1.5;
   text-wrap: balance;
 }
 
@@ -156,7 +228,6 @@
   cursor: not-allowed;
 }
 
-/* Animated "writing" dots shown while generating. */
 .dots {
   display: inline-flex;
   gap: 0.22rem;
@@ -244,7 +315,7 @@
 
 /* ── Result ──────────────────────────────────────────────────────────────── */
 .result {
-  margin-top: clamp(1.75rem, 4vw, 2.5rem);
+  margin-top: clamp(1.5rem, 4vw, 2.25rem);
   animation: rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
@@ -297,15 +368,27 @@
   outline-offset: 2px;
 }
 
+/* Fixed-height, vertically-scrollable container — a long article scrolls inside
+   its box instead of stretching the page. The paper styling (border, gold spine,
+   shadow) lives on the scroll box; the article itself just sets typography. */
+.article-scroll {
+  max-height: clamp(18rem, 48vh, 34rem);
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--gold);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+
+.article-scroll--example {
+  max-height: clamp(16rem, 40vh, 28rem);
+  box-shadow: var(--shadow-md);
+}
+
 .article {
   margin: 0;
   padding: clamp(1.5rem, 4vw, 2.5rem);
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
-  /* A slim gold spine on the left edge — an editorial "pull" cue. */
-  border-left: 3px solid var(--gold);
   /* Preserve the plain-text paragraph/heading line breaks from the API. */
   white-space: pre-wrap;
   /* Serif body for a warm, readable, magazine-like reading experience. */
@@ -313,7 +396,6 @@
   font-size: clamp(1.04rem, 2.2vw, 1.16rem);
   line-height: 1.75;
   color: var(--ink);
-  /* The article is long-form prose; cap the measure on very wide screens. */
   overflow-wrap: break-word;
 }
 
@@ -323,6 +405,118 @@
 .article::first-line {
   font-weight: 600;
   color: var(--plum-deep);
+}
+
+/* ── Below-the-fold sections (always present — nav anchors target them) ───── */
+.section {
+  width: 100%;
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: clamp(2.5rem, 6vw, 4rem) clamp(1rem, 4vw, 2rem);
+  border-top: 1px solid var(--border);
+  scroll-margin-top: 4.5rem; /* clear the sticky top bar when anchored */
+}
+
+.section h2 {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: clamp(1.5rem, 4vw, 2rem);
+  color: var(--plum-deep);
+  margin: 0 0 1.5rem;
+  text-align: center;
+}
+
+.section__lead {
+  margin: -0.75rem 0 1.5rem;
+  text-align: center;
+  color: var(--ink-muted);
+  font-size: 0.96rem;
+}
+
+/* How it works */
+.how__steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.step {
+  padding: 1.4rem 1.1rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  text-align: center;
+}
+
+.step__num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--plum);
+  color: #fff;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin-bottom: 0.75rem;
+}
+
+.step h3 {
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0 0 0.4rem;
+}
+
+.step p {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+/* ── Footer ──────────────────────────────────────────────────────────────── */
+.footer {
+  margin-top: auto;
+  padding: 2rem clamp(1rem, 4vw, 2rem) 2.5rem;
+  border-top: 1px solid var(--border);
+  text-align: center;
+}
+
+.footer__attr {
+  margin: 0 0 0.4rem;
+  font-family: var(--font-serif);
+  color: var(--plum-deep);
+  font-size: 1rem;
+}
+
+.footer__note {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+/* Pilot note kept subtle but clearly legible (not greyed into invisibility). */
+.footer__pilot {
+  font-weight: 600;
+  color: var(--plum);
+}
+
+.footer__note a {
+  color: var(--plum);
+  text-decoration: none;
+}
+
+.footer__note a:hover {
+  text-decoration: underline;
 }
 
 /* ── Motion ──────────────────────────────────────────────────────────────── */
@@ -358,7 +552,7 @@
   }
 }
 
-/* ── Responsive: stack the form on small screens ─────────────────────────── */
+/* ── Responsive: stack the form + steps on small screens ─────────────────── */
 @media (max-width: 34rem) {
   .form {
     flex-direction: column;
@@ -372,11 +566,23 @@
   .result-bar {
     flex-wrap: wrap;
   }
+
+  .how__steps {
+    grid-template-columns: 1fr;
+  }
+
+  .nav {
+    gap: 0.9rem;
+  }
+
+  .nav a {
+    font-size: 0.82rem;
+  }
 }
 
 /* ── Respect reduced-motion preferences ──────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
-  .app,
+  .hero__inner,
   .result,
   .status,
   .error {
@@ -390,7 +596,8 @@
 
   .generate-btn,
   .copy-btn,
-  .url-input {
+  .url-input,
+  .nav a {
     transition: none;
   }
 }

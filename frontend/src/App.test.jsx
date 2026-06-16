@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { render, screen, fireEvent, act, within } from "@testing-library/react";
 
 import App from "./App.jsx";
 
@@ -336,5 +336,33 @@ describe("Idle hint", () => {
 
     await screen.findByLabelText("Generated article");
     expect(screen.queryByText(HINT)).not.toBeInTheDocument();
+  });
+});
+
+describe("Top nav", () => {
+  it("renders the text logo and the nav links", () => {
+    render(<App />);
+    expect(screen.getByRole("link", { name: /Sermon Summarizer home/i })).toBeInTheDocument();
+    const nav = screen.getByRole("navigation", { name: "Primary" });
+    expect(within(nav).getByRole("link", { name: "Contact" })).toBeInTheDocument();
+  });
+
+  it("makes Contact a mailto link", () => {
+    render(<App />);
+    const nav = screen.getByRole("navigation", { name: "Primary" });
+    const contact = within(nav).getByRole("link", { name: "Contact" });
+    expect(contact.getAttribute("href")).toMatch(/^mailto:/);
+  });
+});
+
+describe("Footer", () => {
+  it("renders the footer with attribution, a legible pilot note, and the privacy line", () => {
+    render(<App />);
+    // Scope to the footer — "Made for churches and ministries" also appears in
+    // the hero sub-line, so an unscoped getByText would match twice.
+    const footer = screen.getByRole("contentinfo");
+    expect(within(footer).getByText(/Made for churches and ministries/i)).toBeInTheDocument();
+    expect(within(footer).getByText(/Early pilot/i)).toBeInTheDocument();
+    expect(within(footer).getByText(/aren.t stored/i)).toBeInTheDocument();
   });
 });
