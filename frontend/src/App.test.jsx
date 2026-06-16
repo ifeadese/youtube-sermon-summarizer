@@ -315,29 +315,15 @@ describe("Result meta (word count + reading time)", () => {
   });
 });
 
-describe("Idle hint", () => {
-  const HINT = /Works with any public YouTube sermon/i;
-
-  it("shows the idle hint on first render", () => {
+describe("Tagline", () => {
+  it("renders the consolidated tagline", () => {
     render(<App />);
-    expect(screen.getByText(HINT)).toBeInTheDocument();
-  });
-
-  it("hides the idle hint once an article is generated", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ article: "Title\n\nBody." }) }),
-    );
-    render(<App />);
-    expect(screen.getByText(HINT)).toBeInTheDocument();
-
-    typeUrl();
-    clickGenerate();
-
-    await screen.findByLabelText("Generated article");
-    expect(screen.queryByText(HINT)).not.toBeInTheDocument();
+    expect(
+      screen.getByText(/Paste a captioned YouTube sermon link and get a clean, ready-to-publish article/i),
+    ).toBeInTheDocument();
   });
 });
+
 
 describe("Top nav", () => {
   it("renders the text logo and the nav links", () => {

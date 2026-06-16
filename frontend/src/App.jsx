@@ -90,12 +90,7 @@ export default function App() {
             </span>
             <h1>YouTube Sermon Summarizer</h1>
             <p className="tagline">
-              Paste a YouTube sermon link and get a clean, ready-to-publish article
-              in one click.
-            </p>
-            <p className="subhead">
-              Made for churches and ministries turning Sunday&apos;s message into a
-              blog-ready recap.
+              Paste a captioned YouTube sermon link and get a clean, ready-to-publish article.
             </p>
           </div>
 
@@ -173,12 +168,7 @@ export default function App() {
             </section>
           )}
 
-          {!article && !loading && !error && (
-            <p className="hint">
-              Works with any public YouTube sermon that has captions. Your article
-              renders here, ready to copy into your site.
-            </p>
-          )}
+
         </div>
       </main>
 
