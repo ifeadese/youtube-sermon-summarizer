@@ -6,10 +6,21 @@ on:
   pull_request:
     branches: [master]
 
+# Least privilege: this workflow only reads the code and runs tests.
+permissions:
+  contents: read
+
+# Don't pile up redundant runs — a new push to the same branch/PR cancels the
+# in-progress run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   backend:
     name: Backend (lockfile install + pytest)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: backend
@@ -20,6 +31,11 @@ jobs:
         with:
           # Single source of truth for the Python version.
           python-version-file: backend/.python-version
+          # Cache pip downloads, keyed on the lock + dev requirement files.
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements.lock
+            backend/requirements-dev.txt
 
       - name: Install from the lockfile (reproducible) + dev deps
         run: pip install -r requirements.lock -r requirements-dev.txt
@@ -30,6 +46,7 @@ jobs:
   frontend:
     name: Frontend (lint + test + build)
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: frontend
