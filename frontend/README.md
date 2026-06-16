@@ -53,6 +53,13 @@ npm run lint       # ESLint (flat config) over src/
 Node `^20.19.0 || >=22.12.0` (pinned in `package.json` `engines`, matching the
 Vite 8 toolchain).
 
+## Fonts
+
+The UI uses **Fraunces** (serif display) and **Inter** (sans body), self-hosted
+via [`@fontsource`](https://fontsource.org/) and imported in `src/main.jsx`.
+They're bundled into `dist/` at build time, so there are **no third-party font
+requests** — the app renders identically offline and under a strict CSP.
+
 ## Deploy (Vercel)
 
 The frontend deploys to Vercel from the **same repo** as the backend — point
