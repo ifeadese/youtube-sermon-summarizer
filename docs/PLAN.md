@@ -245,14 +245,20 @@ Write the system prompt that tells Claude how to transform raw transcript text i
 
 **Acceptance criteria:**
 - Prompt stored in its own file (`backend/prompts.py`) for easy iteration
-- Given a real sermon transcript, Claude produces an article that passes this checklist:
-  - [ ] Has a compelling title
-  - [ ] Contains 3+ subheadings
-  - [ ] Faithfully represents the sermon's message (no fabricated points or scripture references)
-  - [ ] Between 800–1500 words
+- Given a real sermon transcript, Claude produces a reflection that passes this checklist:
+  - [ ] Has a faithful title (reflects the sermon's actual message, not clickbait)
+  - [ ] Includes the primary Scripture reference on its own line (when the preacher states one)
+  - [ ] Contains 2–4 subheadings that mirror the preacher's own emphasis
+  - [ ] Faithfully represents the sermon's message (no fabricated points/scripture, no added commentary, analogies, or illustrations)
+  - [ ] Reverent, first-person-plural ("we/us/our") reflection tone
+  - [ ] ≤750 words (target 550–700)
   - [ ] Reads naturally — no meta-AI phrasing ("In this sermon, the pastor explores..."), no generic filler openers, no repeated phrasing patterns
   - [ ] Output is plain text with line breaks for paragraphs (no Markdown, no HTML) — so it pastes cleanly into Squarespace's rich text editor without rendering literal `##` or `**` symbols
 - Tested with 3 real transcripts; all pass the checklist above
+
+> **Format note (v1.1):** the prompt was tuned from a long-form 800–1500-word
+> article to a concise ≤750-word reverent "we"-voice reflection, derived from
+> the maintainer's hand-tuned writing guide. See `docs/PROMPT_LOG.md`.
 
 **Key steps:**
 - Create `backend/prompts.py` with a `SYSTEM_PROMPT` string
@@ -370,16 +376,18 @@ Make sure every possible failure gives the user a friendly, helpful message inst
 
 ---
 
-#### Issue 11 — Prompt tuning and output quality (tune at volume)
+#### Issue 11 — Prompt tuning and output quality (tune at volume) — GitHub #12
 
 Run 5–10 real church sermons through the system. Compare outputs. Refine the prompt until the articles are consistently publish-ready. This builds on the first draft from Issue 5 — here you stress-test with more sermons and lock in the final version.
 
 **Acceptance criteria:**
-- 5+ real sermons produce articles that pass the quality checklist:
-  - [ ] Has a compelling title
-  - [ ] Contains 3+ subheadings
-  - [ ] Faithfully represents the sermon's message (no fabricated points or scripture)
-  - [ ] Between 800–1500 words
+- 5+ real sermons produce reflections that pass the quality checklist:
+  - [ ] Has a faithful title (reflects the sermon's actual message, not clickbait)
+  - [ ] Includes the primary Scripture reference on its own line (when the preacher states one)
+  - [ ] Contains 2–4 subheadings that mirror the preacher's own emphasis
+  - [ ] Faithfully represents the sermon's message (no fabricated points/scripture, no added commentary, analogies, or illustrations)
+  - [ ] Reverent, first-person-plural ("we/us/our") reflection tone
+  - [ ] ≤750 words (target 550–700)
   - [ ] Reads naturally — no meta-AI phrasing, no generic filler openers, no repeated phrasing patterns
   - [ ] You would publish it without edits
 - `docs/PROMPT_LOG.md` records what changed and why
@@ -492,11 +500,11 @@ Since late 2024, YouTube blocks transcript requests from most datacenter IPs (AW
 
 **Claude API (per article):**
 - A 45-min sermon transcript ≈ 8,000–12,000 tokens input
-- A 1,500-word article ≈ 2,000 tokens output
-- Using the current Claude Sonnet model (~$3/M input, ~$15/M output): **~$0.05–0.07 per article**
-  - Math: 12k input × $3/M = $0.036 + 2k output × $15/M = $0.030 → ~$0.066 at the high end
-  - Add ~10% buffer for system prompt overhead → ~$0.07 conservative max
-- At 4 articles/month in steady production: **~$0.20–0.28/month**
+- A ≤750-word reflection (v1.1 format) ≈ 1,000 tokens output
+- Using the current Claude Sonnet model (~$3/M input, ~$15/M output): **~$0.04–0.06 per article**
+  - Math: 12k input × $3/M = $0.036 + 1k output × $15/M = $0.015 → ~$0.051 at the high end
+  - Add ~10% buffer for system prompt overhead → ~$0.06 conservative max
+- At 4 articles/month in steady production: **~$0.16–0.24/month**
 
 **Claude API (dev phases — the real cost driver):**
 - Production cost is trivial, but prompt tuning, demos, debugging, and testing re-run full generations many times. Each test/discarded output still costs full tokens.
