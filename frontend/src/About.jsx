@@ -21,36 +21,12 @@ export default function About({ onBackToHome }) {
           <p>
             <strong>Sermon Summarizer</strong> was built to solve this. We extract the spoken content of your sermon, strip away verbal fillers, and intelligently restructure it into a beautifully written, readable, and highly engaging article. Whether you're publishing weekly recaps, crafting newsletters, or expanding your digital library, we make your message accessible to everyone.
           </p>
-        </div>
-      </div>
-
-      <div className="about-tech">
-        <h2>How It Works</h2>
-        <p className="about-section-lead">Three simple steps to transition your message from pulpit to print.</p>
-        <div className="about-grid">
-          <div className="about-card">
-            <div className="about-card__num">1</div>
-            <h3>Audio Extraction</h3>
-            <p>
-              Simply paste the link to your YouTube video. We securely fetch the sermon's transcript and align the content structure.
-            </p>
-          </div>
-
-          <div className="about-card">
-            <div className="about-card__num">2</div>
-            <h3>Synthesis & Polish</h3>
-            <p>
-              Our system cleans formatting, corrects grammar, sections key topics, and extracts scripture references while preserving the unique voice of the speaker.
-            </p>
-          </div>
-
-          <div className="about-card">
-            <div className="about-card__num">3</div>
-            <h3>Ready to Publish</h3>
-            <p>
-              Copy the resulting recap with a single click. It's ready to upload directly to your website, blog, or community platform.
-            </p>
-          </div>
+          <p>
+            The process is entirely seamless: by simply pasting a YouTube sermon link, the platform automatically retrieves the transcript, resolves verbal repetitions, structures readability blocks, inserts clear headings, and extracts scripture references. In a matter of seconds, you get a clean, copy-ready article that fully preserves the original message and voice of the speaker.
+          </p>
+          <p>
+            By transforming spoken sermons into structured, SEO-optimized text, we do more than save you time—we expand the reach of your ministry. Written summaries are indexable by search engines, easy to scan, and simple to repurpose into study guides, newsletters, or social media digests, keeping your community connected and fed throughout the week.
+          </p>
         </div>
       </div>
 

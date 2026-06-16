@@ -680,81 +680,9 @@
   margin-bottom: 0;
 }
 
-.about-tech {
-  margin-bottom: clamp(2.5rem, 6vw, 4rem);
-}
-
-.about-tech h2 {
-  font-family: var(--font-serif);
-  font-size: clamp(1.6rem, 4vw, 2rem);
-  color: var(--plum-deep);
-  text-align: center;
-  margin: 0 0 0.5rem;
-}
-
-.about-section-lead {
-  text-align: center;
-  color: var(--ink-muted);
-  font-size: 0.96rem;
-  margin: 0 0 2rem;
-}
-
-.about-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1.25rem;
-}
-
-.about-card {
-  padding: 1.5rem 1.25rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-sm);
-  text-align: center;
-}
-
-.about-card__num {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  border-radius: 50%;
-  background: var(--plum);
-  color: #fff;
-  font-family: var(--font-sans);
-  font-weight: 600;
-  font-size: 1rem;
-  margin-bottom: 1rem;
-}
-
-.about-card h3 {
-  font-family: var(--font-sans);
-  font-size: 1.05rem;
-  font-weight: 600;
-  color: var(--ink);
-  margin: 0 0 0.5rem;
-}
-
-.about-card p {
-  margin: 0;
-  color: var(--ink-muted);
-  font-size: 0.9rem;
-  line-height: 1.5;
-}
-
 .about-cta {
   text-align: center;
   margin-top: 2rem;
-}
-
-/* Stack grid on small screens */
-@media (max-width: 44rem) {
-  .about-grid {
-    grid-template-columns: 1fr;
-    gap: 1rem;
-  }
 }
 
 /* ── Respect reduced-motion preferences ──────────────────────────────────── */
