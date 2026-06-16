@@ -43,24 +43,38 @@
   gap: clamp(0.75rem, 3vw, 1.5rem);
 }
 
-.nav a {
+.nav a,
+.nav-btn {
   font-family: var(--font-sans);
   font-size: 0.9rem;
   font-weight: 500;
   color: var(--ink-muted);
   text-decoration: none;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
   white-space: nowrap;
-  transition: color 0.15s ease;
+  transition: color 0.15s ease, border-color 0.15s ease;
 }
 
-.nav a:hover {
+.nav a:hover,
+.nav-btn:hover {
   color: var(--plum);
 }
 
-.nav a:focus-visible {
+.nav a:focus-visible,
+.nav-btn:focus-visible {
   outline: 2px solid var(--gold);
   outline-offset: 3px;
   border-radius: 4px;
+}
+
+.nav-btn--active {
+  color: var(--plum-deep);
+  font-weight: 600;
+  border-bottom: 2px solid var(--gold);
 }
 
 /* ── Hero: form centered on both axes in the space below the top bar ─────── */
@@ -583,7 +597,8 @@
     gap: 0.9rem;
   }
 
-  .nav a {
+  .nav a,
+  .nav-btn {
     font-size: 0.82rem;
   }
 
@@ -600,12 +615,155 @@
   }
 }
 
+/* ── About Page ─────────────────────────────────────────────────────────── */
+.about-page {
+  width: 100%;
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: clamp(2rem, 6vw, 4rem) clamp(1rem, 4vw, 2rem);
+  animation: rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.about-hero {
+  text-align: center;
+  margin-bottom: clamp(2rem, 5vw, 3rem);
+}
+
+.about-title {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: clamp(2.1rem, 6.5vw, 3.25rem);
+  line-height: 1.05;
+  letter-spacing: -0.015em;
+  margin: 1.1rem 0 0;
+  color: var(--plum-deep);
+  text-wrap: balance;
+}
+
+.about-subtitle {
+  margin: 0.9rem auto 0;
+  max-width: 32rem;
+  color: var(--ink-muted);
+  font-size: clamp(1rem, 2.4vw, 1.12rem);
+  line-height: 1.55;
+  text-wrap: balance;
+}
+
+.about-mission {
+  margin-bottom: clamp(2.5rem, 6vw, 4rem);
+}
+
+.about-mission__card {
+  padding: clamp(1.5rem, 4vw, 2.5rem);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--plum);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+.about-mission__card h2 {
+  font-family: var(--font-serif);
+  font-size: clamp(1.5rem, 4vw, 1.85rem);
+  color: var(--plum-deep);
+  margin: 0 0 1rem;
+}
+
+.about-mission__card p {
+  margin: 0 0 1rem;
+  color: var(--ink-muted);
+  font-size: 1.02rem;
+  line-height: 1.6;
+}
+
+.about-mission__card p:last-child {
+  margin-bottom: 0;
+}
+
+.about-tech {
+  margin-bottom: clamp(2.5rem, 6vw, 4rem);
+}
+
+.about-tech h2 {
+  font-family: var(--font-serif);
+  font-size: clamp(1.6rem, 4vw, 2rem);
+  color: var(--plum-deep);
+  text-align: center;
+  margin: 0 0 0.5rem;
+}
+
+.about-section-lead {
+  text-align: center;
+  color: var(--ink-muted);
+  font-size: 0.96rem;
+  margin: 0 0 2rem;
+}
+
+.about-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+}
+
+.about-card {
+  padding: 1.5rem 1.25rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  text-align: center;
+}
+
+.about-card__num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 50%;
+  background: var(--plum);
+  color: #fff;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 1rem;
+  margin-bottom: 1rem;
+}
+
+.about-card h3 {
+  font-family: var(--font-sans);
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0 0 0.5rem;
+}
+
+.about-card p {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.about-cta {
+  text-align: center;
+  margin-top: 2rem;
+}
+
+/* Stack grid on small screens */
+@media (max-width: 44rem) {
+  .about-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+}
+
 /* ── Respect reduced-motion preferences ──────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   .hero__inner,
   .result,
   .status,
-  .error {
+  .error,
+  .about-page {
     animation: none;
   }
 
@@ -617,7 +775,8 @@
   .generate-btn,
   .copy-btn,
   .url-input,
-  .nav a {
+  .nav a,
+  .nav-btn {
     transition: none;
   }
 }

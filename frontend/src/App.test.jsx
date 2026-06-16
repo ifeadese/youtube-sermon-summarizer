@@ -168,7 +168,7 @@ describe("App", () => {
     clickGenerate();
 
     expect(await screen.findByRole("status")).toBeInTheDocument();
-    expect(screen.getByRole("button")).toBeDisabled();
+    expect(screen.getByRole("button", { name: /generat/i })).toBeDisabled();
 
     resolveFetch({ ok: true, json: async () => ({ article: "done" }) });
 
@@ -326,11 +326,16 @@ describe("Tagline", () => {
 
 
 describe("Top nav", () => {
-  it("renders the text logo and the nav links", () => {
+  it("renders the text logo and the nav links in the correct order", () => {
     render(<App />);
     expect(screen.getByRole("link", { name: /Sermon Summarizer home/i })).toBeInTheDocument();
     const nav = screen.getByRole("navigation", { name: "Primary" });
-    expect(within(nav).getByRole("link", { name: "Contact" })).toBeInTheDocument();
+    const aboutBtn = within(nav).getByRole("button", { name: /About/i });
+    const contactLink = within(nav).getByRole("link", { name: /Contact/i });
+    
+    expect(aboutBtn).toBeInTheDocument();
+    expect(contactLink).toBeInTheDocument();
+    expect(aboutBtn.compareDocumentPosition(contactLink)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
   it("makes Contact a mailto link", () => {
@@ -338,6 +343,39 @@ describe("Top nav", () => {
     const nav = screen.getByRole("navigation", { name: "Primary" });
     const contact = within(nav).getByRole("link", { name: "Contact" });
     expect(contact.getAttribute("href")).toMatch(/^mailto:/);
+  });
+});
+
+describe("About page", () => {
+  it("navigates to About page on clicking About button, hides the main form, and displays About content", () => {
+    render(<App />);
+    
+    expect(screen.getByRole("heading", { name: "YouTube Sermon Summarizer" })).toBeInTheDocument();
+    expect(screen.getByLabelText("YouTube URL")).toBeInTheDocument();
+    
+    const aboutBtn = screen.getByRole("button", { name: /About/i });
+    fireEvent.click(aboutBtn);
+    
+    expect(screen.queryByRole("heading", { name: "YouTube Sermon Summarizer" })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("YouTube URL")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "About Sermon Summarizer" })).toBeInTheDocument();
+    expect(screen.getByText(/Bridging the gap between spoken word/i)).toBeInTheDocument();
+  });
+
+  it("navigates back to home on clicking logo or CTA button", () => {
+    render(<App />);
+    
+    fireEvent.click(screen.getByRole("button", { name: /About/i }));
+    expect(screen.getByRole("heading", { name: "About Sermon Summarizer" })).toBeInTheDocument();
+    
+    fireEvent.click(screen.getByRole("button", { name: /Back to Summarizer/i }));
+    expect(screen.getByRole("heading", { name: "YouTube Sermon Summarizer" })).toBeInTheDocument();
+    
+    fireEvent.click(screen.getByRole("button", { name: /About/i }));
+    expect(screen.getByRole("heading", { name: "About Sermon Summarizer" })).toBeInTheDocument();
+    
+    fireEvent.click(screen.getByRole("link", { name: /Sermon Summarizer home/i }));
+    expect(screen.getByRole("heading", { name: "YouTube Sermon Summarizer" })).toBeInTheDocument();
   });
 });
 
