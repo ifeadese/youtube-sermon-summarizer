@@ -30,8 +30,9 @@ truth for the target voice and length.
 | Title | "compelling, specific" (model-invented) | Faithful to the sermon's actual message, not clickbait |
 
 **Unchanged:** plain-text-only output rules (no Markdown/HTML, headings as plain
-lines) so it pastes cleanly into Squarespace; "return only the article"; ignore
-worship lyrics / music cues / audience call-and-response / transcription noise.
+lines) so it pastes cleanly into Squarespace; "return only" the finished output
+with no preamble; ignore worship lyrics / music cues / audience call-and-response
+/ transcription noise.
 
 **Deferred to a follow-up PR (v1.2):**
 - Use the *actual* YouTube video title (via oEmbed, with a graceful fallback to a

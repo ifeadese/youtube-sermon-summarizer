@@ -142,6 +142,25 @@ def test_whitespace_only_multiblock_raises():
         s._get_client = original
 
 
+def test_system_prompt_keeps_load_bearing_invariants():
+    """Guard the v1.1 reflection contract: these constraints are load-bearing
+    (plain-text paste into Squarespace, length cap, voice, faithfulness), and an
+    accidental edit that drops one should fail CI rather than silently ship.
+    The output itself can't be unit-tested without live calls, so we assert the
+    distinctive phrases that encode each constraint are still present."""
+    invariants = {
+        "plain-text output": "plain text only",
+        "no Markdown": "no Markdown",
+        "word cap (<=750)": "750",
+        "first-person-plural voice": "first-person-plural",
+        "2-4 emphasis-based headings": "Two to four sections",
+        "no fabrication": "Do NOT invent",
+        "no added commentary/analogies": "Do NOT add your own commentary",
+    }
+    missing = [name for name, phrase in invariants.items() if phrase not in SYSTEM_PROMPT]
+    assert not missing, f"SYSTEM_PROMPT dropped load-bearing invariant(s): {missing}"
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_") and callable(v)]
     for t in tests:

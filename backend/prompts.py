@@ -1,7 +1,8 @@
 """System prompt for sermon-to-reflection generation.
 
 This is the core product — output quality lives or dies here. Kept in its own
-file so it's easy to iterate on (see Issue 12: tune at volume).
+file so it's easy to iterate on (see GitHub issue #12 — prompt tuning at volume;
+"Issue 11" in docs/PLAN.md's plan numbering).
 
 v1.1 (reflection format): a concise, reverent first-person-plural reflection
 (<=750 words, 2–4 emphasis-based headings) that faithfully mirrors what the

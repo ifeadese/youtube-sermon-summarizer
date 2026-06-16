@@ -376,7 +376,7 @@ Make sure every possible failure gives the user a friendly, helpful message inst
 
 ---
 
-#### Issue 11 — Prompt tuning and output quality (tune at volume)
+#### Issue 11 — Prompt tuning and output quality (tune at volume) — GitHub #12
 
 Run 5–10 real church sermons through the system. Compare outputs. Refine the prompt until the articles are consistently publish-ready. This builds on the first draft from Issue 5 — here you stress-test with more sermons and lock in the final version.
 
@@ -501,10 +501,10 @@ Since late 2024, YouTube blocks transcript requests from most datacenter IPs (AW
 **Claude API (per article):**
 - A 45-min sermon transcript ≈ 8,000–12,000 tokens input
 - A ≤750-word reflection (v1.1 format) ≈ 1,000 tokens output
-- Using the current Claude Sonnet model (~$3/M input, ~$15/M output): **~$0.04–0.05 per article**
+- Using the current Claude Sonnet model (~$3/M input, ~$15/M output): **~$0.04–0.06 per article**
   - Math: 12k input × $3/M = $0.036 + 1k output × $15/M = $0.015 → ~$0.051 at the high end
   - Add ~10% buffer for system prompt overhead → ~$0.06 conservative max
-- At 4 articles/month in steady production: **~$0.18–0.22/month**
+- At 4 articles/month in steady production: **~$0.16–0.24/month**
 
 **Claude API (dev phases — the real cost driver):**
 - Production cost is trivial, but prompt tuning, demos, debugging, and testing re-run full generations many times. Each test/discarded output still costs full tokens.
