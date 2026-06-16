@@ -16,10 +16,11 @@
   --gold: #c8962e;
   --gold-deep: #ab7d1f;
 
-  /* Ink */
+  /* Ink — all three meet WCAG AA (>=4.5:1) on the cream surfaces. --ink-faint
+     (#786a5a ~= 4.9:1 on cream) is the lightest we go for real text. */
   --ink: #2a2420;
   --ink-muted: #6b5d52;
-  --ink-faint: #9a8b7d;
+  --ink-faint: #786a5a;
 
   /* Lines */
   --border: rgba(91, 42, 74, 0.14);
@@ -37,8 +38,8 @@
   --shadow-md: 0 10px 30px -12px rgba(67, 32, 58, 0.22);
   --shadow-lg: 0 24px 60px -22px rgba(67, 32, 58, 0.32);
 
-  --font-serif: "Fraunces", Georgia, "Times New Roman", serif;
-  --font-sans: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-serif: "Fraunces Variable", Georgia, "Times New Roman", serif;
+  --font-sans: "Inter Variable", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 
   font-family: var(--font-sans);
   line-height: 1.5;
@@ -54,11 +55,10 @@
 
 body {
   margin: 0;
-  min-height: 100vh;
   /* Soft ambient warmth — a barely-there glow behind the content so the cream
-     canvas doesn't read as flat, without adding visual clutter. */
+     canvas doesn't read as flat, without adding visual clutter. (No
+     background-attachment: fixed — it causes scroll jank/repaint on mobile.) */
   background:
     radial-gradient(80rem 40rem at 50% -12rem, var(--bg-warm), transparent 60%),
     var(--bg);
-  background-attachment: fixed;
 }

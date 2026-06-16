@@ -65,7 +65,7 @@ export default function App() {
             <span className="wordmark__mark" aria-hidden="true">
               ✦
             </span>
-            Sermon Studio
+            Sermon → Article
           </span>
           <h1>YouTube Sermon Summarizer</h1>
           <p className="tagline">

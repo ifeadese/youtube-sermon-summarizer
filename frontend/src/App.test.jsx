@@ -289,3 +289,52 @@ describe("Copy button", () => {
     expect(screen.queryByRole("button", { name: "Copied!" })).not.toBeInTheDocument();
   });
 });
+
+describe("Result meta (word count + reading time)", () => {
+  async function renderWithArticle(article) {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ article }) }),
+    );
+    render(<App />);
+    typeUrl();
+    clickGenerate();
+    await screen.findByLabelText("Generated article");
+  }
+
+  it("counts words and floors the reading time at 1 minute for a short article", async () => {
+    // 5 words → round(5/200) = 0, floored to a 1 min read.
+    await renderWithArticle("My Title\n\nA fine article.");
+    expect(screen.getByText("5 words · 1 min read")).toBeInTheDocument();
+  });
+
+  it("rounds reading time to ~200 words per minute for a longer article", async () => {
+    // 400 single-token words → round(400/200) = 2 min read.
+    await renderWithArticle(Array(400).fill("word").join(" "));
+    expect(screen.getByText("400 words · 2 min read")).toBeInTheDocument();
+  });
+});
+
+describe("Idle hint", () => {
+  const HINT = /Works with any public YouTube sermon/i;
+
+  it("shows the idle hint on first render", () => {
+    render(<App />);
+    expect(screen.getByText(HINT)).toBeInTheDocument();
+  });
+
+  it("hides the idle hint once an article is generated", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ article: "Title\n\nBody." }) }),
+    );
+    render(<App />);
+    expect(screen.getByText(HINT)).toBeInTheDocument();
+
+    typeUrl();
+    clickGenerate();
+
+    await screen.findByLabelText("Generated article");
+    expect(screen.queryByText(HINT)).not.toBeInTheDocument();
+  });
+});

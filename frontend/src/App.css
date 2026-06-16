@@ -2,7 +2,10 @@
 .page {
   display: flex;
   justify-content: center;
+  /* dvh tracks the *visible* viewport, avoiding the mobile-browser-chrome
+     overflow that plagues 100vh; vh is the fallback for older browsers. */
   min-height: 100vh;
+  min-height: 100dvh;
   /* Generous on desktop, tightens automatically on phones via clamp(). */
   padding: clamp(1.5rem, 5vw, 4.5rem) clamp(1rem, 4vw, 2rem) 3.5rem;
 }
@@ -314,7 +317,9 @@
   overflow-wrap: break-word;
 }
 
-/* The first line is the article's title — give it editorial weight. */
+/* The model emits the title on the first line, so give the first *rendered*
+   line editorial weight. This is a graceful enhancement only: a very long
+   title that wraps emphasizes just its first line, which is acceptable. */
 .article::first-line {
   font-weight: 600;
   color: var(--plum-deep);
