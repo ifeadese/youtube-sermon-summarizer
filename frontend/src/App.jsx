@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { generateArticle } from "./api.js";
+import About from "./About.jsx";
 import "./App.css";
 
 // Working brand name for the text logo. Swap to the final product name once the
@@ -12,6 +13,7 @@ const CONTACT_EMAIL = "hello@example.com";
 
 
 export default function App() {
+  const [view, setView] = useState("home");
   const [url, setUrl] = useState("");
   const [article, setArticle] = useState("");
   const [loading, setLoading] = useState(false);
@@ -68,109 +70,128 @@ export default function App() {
   return (
     <div className="page">
       <header className="topbar">
-        <a className="brand" href="#top" aria-label={`${BRAND} home`}>
+        <a
+          className="brand"
+          href="#top"
+          onClick={(e) => {
+            e.preventDefault();
+            setView("home");
+          }}
+          aria-label={`${BRAND} home`}
+        >
           <span className="brand__mark" aria-hidden="true">
             ✦
           </span>
           {BRAND}
         </a>
         <nav className="nav" aria-label="Primary">
+          <button
+            type="button"
+            className={`nav-btn ${view === "about" ? "nav-btn--active" : ""}`}
+            onClick={() => setView("about")}
+          >
+            About
+          </button>
           <a href={`mailto:${CONTACT_EMAIL}`}>Contact</a>
         </nav>
       </header>
 
-      <main className="hero" id="top">
-        <div className="hero__inner">
-          <div className="header">
-            <span className="wordmark">
-              <span className="wordmark__mark" aria-hidden="true">
-                ✦
+      {view === "about" ? (
+        <About onBackToHome={() => setView("home")} />
+      ) : (
+        <main className="hero" id="top">
+          <div className="hero__inner">
+            <div className="header">
+              <span className="wordmark">
+                <span className="wordmark__mark" aria-hidden="true">
+                  ✦
+                </span>
+                Sermon → Article
               </span>
-              Sermon → Article
-            </span>
-            <h1>YouTube Sermon Summarizer</h1>
-            <p className="tagline">
-              Paste a captioned YouTube sermon link and get a clean, ready-to-publish article.
-            </p>
-          </div>
-
-          <form className="form" onSubmit={handleSubmit}>
-            <div className="field">
-              <span className="field__icon" aria-hidden="true">
-                ▶
-              </span>
-              <input
-                type="url"
-                className="url-input"
-                placeholder="https://www.youtube.com/watch?v=…"
-                value={url}
-                onChange={(event) => setUrl(event.target.value)}
-                required
-                autoComplete="off"
-                spellCheck="false"
-                aria-label="YouTube URL"
-              />
+              <h1>YouTube Sermon Summarizer</h1>
+              <p className="tagline">
+                Paste a captioned YouTube sermon link and get a clean, ready-to-publish article.
+              </p>
             </div>
-            <button type="submit" className="generate-btn" disabled={loading || !url.trim()}>
-              {loading ? (
-                <>
-                  <span className="dots" aria-hidden="true">
-                    <i />
-                    <i />
-                    <i />
-                  </span>
-                  Generating…
-                </>
-              ) : (
-                "Generate Article"
-              )}
-            </button>
-          </form>
 
-          {loading && (
-            <p className="status" role="status">
-              Fetching the transcript and writing the article — this can take up to a minute.
-            </p>
-          )}
-
-          {error && (
-            <p className="error" role="alert">
-              <span className="error__icon" aria-hidden="true">
-                !
-              </span>
-              {error}
-            </p>
-          )}
-
-          {article && (
-            <section className="result">
-              <div className="result-bar">
-                <span className="result-meta">
-                  {stats.words.toLocaleString()} words · {stats.minutes} min read
+            <form className="form" onSubmit={handleSubmit}>
+              <div className="field">
+                <span className="field__icon" aria-hidden="true">
+                  ▶
                 </span>
-                <button type="button" className="copy-btn" onClick={handleCopy}>
-                  <span className="copy-btn__icon" aria-hidden="true">
-                    {copied ? "✓" : "⧉"}
-                  </span>
-                  {copied ? "Copied!" : "Copy Article"}
-                </button>
-                <span className="visually-hidden" aria-live="polite">
-                  {copied ? "Article copied to clipboard" : ""}
+                <input
+                  type="url"
+                  className="url-input"
+                  placeholder="https://www.youtube.com/watch?v=…"
+                  value={url}
+                  onChange={(event) => setUrl(event.target.value)}
+                  required
+                  autoComplete="off"
+                  spellCheck="false"
+                  aria-label="YouTube URL"
+                />
+              </div>
+              <button type="submit" className="generate-btn" disabled={loading || !url.trim()}>
+                {loading ? (
+                  <>
+                    <span className="dots" aria-hidden="true">
+                      <i />
+                      <i />
+                      <i />
+                    </span>
+                    Generating…
+                  </>
+                ) : (
+                  "Generate Article"
+                )}
+              </button>
+            </form>
+
+            {loading && (
+              <p className="status" role="status">
+                Fetching the transcript and writing the article — this can take up to a minute.
+              </p>
+            )}
+
+            {error && (
+              <p className="error" role="alert">
+                <span className="error__icon" aria-hidden="true">
+                  !
                 </span>
-              </div>
-              {/* Fixed-height, vertically-scrollable so a long article scrolls
-                  inside its box instead of stretching the page. */}
-              <div className="article-scroll">
-                <article className="article" aria-label="Generated article">
-                  {article}
-                </article>
-              </div>
-            </section>
-          )}
+                {error}
+              </p>
+            )}
+
+            {article && (
+              <section className="result">
+                <div className="result-bar">
+                  <span className="result-meta">
+                    {stats.words.toLocaleString()} words · {stats.minutes} min read
+                  </span>
+                  <button type="button" className="copy-btn" onClick={handleCopy}>
+                    <span className="copy-btn__icon" aria-hidden="true">
+                      {copied ? "✓" : "⧉"}
+                    </span>
+                    {copied ? "Copied!" : "Copy Article"}
+                  </button>
+                  <span className="visually-hidden" aria-live="polite">
+                    {copied ? "Article copied to clipboard" : ""}
+                  </span>
+                </div>
+                {/* Fixed-height, vertically-scrollable so a long article scrolls
+                    inside its box instead of stretching the page. */}
+                <div className="article-scroll">
+                  <article className="article" aria-label="Generated article">
+                    {article}
+                  </article>
+                </div>
+              </section>
+            )}
 
 
-        </div>
-      </main>
+          </div>
+        </main>
+      )}
 
 
 
