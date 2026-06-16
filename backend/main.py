@@ -5,6 +5,7 @@ Entry point for the API server. Exposes a health check, a /transcript route
 finished article in one call.
 """
 
+import logging
 import os
 from pathlib import Path
 
@@ -23,6 +24,11 @@ from utils import extract_video_id
 # production the host (e.g. Railway) sets real env vars and there is no .env
 # file, so this is a no-op.
 load_dotenv(Path(__file__).resolve().parent / ".env")
+
+# Ensure app log records (e.g. transcript failure warnings) reliably surface in
+# the host's stdout with a consistent format, rather than relying on Python's
+# last-resort handler. No-op if logging is already configured (e.g. by uvicorn).
+logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s")
 
 app = FastAPI(title="YouTube Sermon Summarizer")
 

@@ -9,6 +9,7 @@ transcript and summarize endpoints both reuse `fetch_transcript`.
 
 import logging
 import os
+import re
 
 import requests
 
@@ -26,6 +27,14 @@ from youtube_transcript_api import (
 from youtube_transcript_api.proxies import GenericProxyConfig, WebshareProxyConfig
 
 logger = logging.getLogger(__name__)
+
+# Strip URL credentials (`//user:pass@host` -> `//***@host`) before logging an
+# exception, so a malformed proxy URL can't leak proxy creds into the logs.
+_USERINFO_RE = re.compile(r"(//)[^/@\s]+@")
+
+
+def _redact(text: str) -> str:
+    return _USERINFO_RE.sub(r"\1***@", text)
 
 
 class TranscriptError(Exception):
@@ -95,7 +104,7 @@ def fetch_transcript(video_id: str) -> str:
     except RequestBlocked as exc:  # also covers IpBlocked (a subclass)
         # Log the real cause: YouTube blocked the IP (usually: missing/invalid
         # proxy in prod, since datacenter IPs are blocked).
-        logger.warning("Transcript blocked for %s (IP/proxy): %r", video_id, exc)
+        logger.warning("Transcript blocked for %s (IP/proxy): %s", video_id, _redact(repr(exc)))
         raise TranscriptError(
             503,
             "Transcript service is temporarily unavailable (YouTube blocked the "
@@ -104,7 +113,7 @@ def fetch_transcript(video_id: str) -> str:
     except InvalidVideoId:
         raise TranscriptError(400, "That doesn't look like a valid YouTube video.")
     except CouldNotRetrieveTranscript as exc:  # catch-all for remaining library errors
-        logger.warning("Transcript retrieval failed for %s: %r", video_id, exc)
+        logger.warning("Transcript retrieval failed for %s: %s", video_id, _redact(repr(exc)))
         raise TranscriptError(502, "Could not retrieve the transcript for this video.")
     except requests.exceptions.RequestException as exc:
         # Transport-level failure (proxy auth/connection error, DNS, timeout,
@@ -112,7 +121,7 @@ def fetch_transcript(video_id: str) -> str:
         # response — the library does not wrap these. This is the branch that
         # made the "mystery 503" opaque; log the real exception (e.g. a 407
         # ProxyError from bad proxy creds).
-        logger.warning("Transcript transport error for %s (proxy/connection): %r", video_id, exc)
+        logger.warning("Transcript transport error for %s (proxy/connection): %s", video_id, _redact(repr(exc)))
         raise TranscriptError(503, "Could not reach YouTube to fetch the transcript. Try again later.")
 
     text = " ".join(snippet.text for snippet in fetched).strip()
