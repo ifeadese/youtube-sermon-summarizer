@@ -26,9 +26,13 @@ describe("App", () => {
     ).toBeInTheDocument();
   });
 
-  it("disables the button until a URL is entered", () => {
+  it("disables the button until a valid YouTube URL is entered", () => {
     render(<MemoryRouter><App /></MemoryRouter>);
     const button = screen.getByRole("button", { name: "Generate Article" });
+    expect(button).toBeDisabled();
+    typeUrl("https://example.com/not-youtube");
+    expect(button).toBeDisabled();
+    typeUrl("not-a-url");
     expect(button).toBeDisabled();
     typeUrl();
     expect(button).toBeEnabled();

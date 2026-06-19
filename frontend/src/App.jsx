@@ -11,7 +11,15 @@ const BRAND = "Sermon Summarizer";
 // Placeholder until the real contact email is provided (issue #35). Swap before merge.
 const CONTACT_EMAIL = "hello@example.com";
 
-
+function isValidYouTubeUrl(urlString) {
+  try {
+    const parsed = new URL(urlString);
+    const host = parsed.hostname.replace(/^www\./, "");
+    return host === "youtube.com" || host === "youtu.be" || host === "m.youtube.com";
+  } catch {
+    return false;
+  }
+}
 
 export default function App() {
   const [url, setUrl] = useState("");
@@ -122,7 +130,7 @@ export default function App() {
                   aria-label="YouTube URL"
                 />
               </div>
-              <button type="submit" className="generate-btn" disabled={loading || !url.trim()}>
+              <button type="submit" className="generate-btn" disabled={loading || !isValidYouTubeUrl(url.trim())}>
                 {loading ? (
                   <>
                     <span className="dots" aria-hidden="true">
