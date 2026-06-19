@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Routes, Route, Link, NavLink } from "react-router-dom";
+import { Routes, Route, Link, NavLink, useLocation } from "react-router-dom";
 
 import { generateArticle } from "./api.js";
+import { initAnalytics, trackEvent, trackPageView } from "./analytics.js";
 import About from "./About.jsx";
 import Contact from "./Contact.jsx";
 import "./App.css";
@@ -20,6 +21,12 @@ function isValidYouTubeUrl(urlString) {
   }
 }
 
+// Single source of truth for word count — used by both the displayed reading
+// stats and the generate_success analytics event, so they can't drift.
+function countWords(text) {
+  return text.trim() ? text.trim().split(/\s+/).length : 0;
+}
+
 export default function App() {
   const [url, setUrl] = useState("");
   const [article, setArticle] = useState("");
@@ -35,12 +42,24 @@ export default function App() {
   // Tracks the "Copied!" reset timer so we can clear it on a re-copy or unmount.
   const copyTimer = useRef(null);
 
+  const location = useLocation();
+
+  // Load analytics once (no-op unless VITE_GA_MEASUREMENT_ID is set).
+  useEffect(() => {
+    initAnalytics();
+  }, []);
+
+  // SPA navigations don't fire a page_view on their own — send one per route.
+  useEffect(() => {
+    trackPageView(location.pathname);
+  }, [location.pathname]);
+
   // Clear any pending "Copied!" reset timer when the component unmounts.
   useEffect(() => () => clearTimeout(copyTimer.current), []);
 
   // Cheap reading stats for the result header (the prompt targets ~550–750 words).
   const stats = useMemo(() => {
-    const words = article.trim() ? article.trim().split(/\s+/).length : 0;
+    const words = countWords(article);
     return { words, minutes: Math.max(1, Math.round(words / 200)) };
   }, [article]);
 
@@ -52,10 +71,22 @@ export default function App() {
     setError("");
     setArticle("");
     setCopied(false);
+    const trimmed = url.trim();
+    trackEvent("generate_submit", { url_valid: isValidYouTubeUrl(trimmed) });
+    const startedAt = Date.now();
     try {
-      setArticle(await generateArticle(url.trim()));
+      const result = await generateArticle(trimmed);
+      setArticle(result);
+      trackEvent("generate_success", {
+        latency_ms: Date.now() - startedAt,
+        word_count: countWords(result),
+      });
     } catch (err) {
       setError(err.message);
+      trackEvent("generate_error", {
+        error_type: err?.type || "unknown",
+        status: err?.status || 0,
+      });
     } finally {
       setLoading(false);
       inFlight.current = false;
@@ -69,15 +100,22 @@ export default function App() {
       setCopied(true);
       clearTimeout(copyTimer.current);
       copyTimer.current = setTimeout(() => setCopied(false), 2000);
+      trackEvent("copy_article", { success: true });
     } catch {
       setError("Couldn't copy to the clipboard — please select and copy the text manually.");
+      trackEvent("copy_article", { success: false });
     }
   }
 
   return (
     <div className="page">
       <header className="topbar">
-        <Link className="brand" to="/" aria-label={`${BRAND} home`}>
+        <Link
+          className="brand"
+          to="/"
+          aria-label={`${BRAND} home`}
+          onClick={() => trackEvent("nav_click", { target: "home" })}
+        >
           <span className="brand__mark" aria-hidden="true">
             ✦
           </span>
@@ -87,12 +125,14 @@ export default function App() {
           <NavLink
             to="/about"
             className={({ isActive }) => `nav-btn ${isActive ? "nav-btn--active" : ""}`}
+            onClick={() => trackEvent("nav_click", { target: "about" })}
           >
             About
           </NavLink>
           <NavLink
             to="/contact"
             className={({ isActive }) => `nav-btn ${isActive ? "nav-btn--active" : ""}`}
+            onClick={() => trackEvent("nav_click", { target: "contact" })}
           >
             Contact
           </NavLink>

@@ -2,6 +2,21 @@ import { render, screen, fireEvent, act, within } from "@testing-library/react";
 
 import { MemoryRouter } from "react-router-dom";
 import App from "./App.jsx";
+import { trackEvent, trackPageView } from "./analytics.js";
+
+// Analytics is mocked file-wide: the existing tests don't assert on it (the
+// mocked fns are harmless no-ops), and the analytics-specific tests below assert
+// the right events fire with the right params.
+vi.mock("./analytics.js", () => ({
+  initAnalytics: vi.fn(),
+  trackEvent: vi.fn(),
+  trackPageView: vi.fn(),
+  isAnalyticsEnabled: vi.fn(() => false),
+}));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 const URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
 
@@ -386,5 +401,99 @@ describe("Footer", () => {
     const link = within(footer).getByRole("link", { name: /Ife Adese/i });
     expect(link).toBeInTheDocument();
     expect(link.getAttribute("href")).toBe("https://ifeadese.com");
+  });
+});
+
+describe("Analytics events", () => {
+  it("tracks a page_view for the current route on render", () => {
+    render(<MemoryRouter initialEntries={["/"]}><App /></MemoryRouter>);
+    expect(trackPageView).toHaveBeenCalledWith("/");
+  });
+
+  it("tracks a page_view on SPA route change", () => {
+    render(<MemoryRouter initialEntries={["/"]}><App /></MemoryRouter>);
+    fireEvent.click(screen.getByRole("link", { name: /About/i }));
+    expect(trackPageView).toHaveBeenCalledWith("/about");
+  });
+
+  it("tracks generate_submit and generate_success on a successful generation", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ article: "My Title\n\nA fine article." }),
+      }),
+    );
+    render(<MemoryRouter><App /></MemoryRouter>);
+    typeUrl();
+    clickGenerate();
+    await screen.findByLabelText("Generated article");
+
+    expect(trackEvent).toHaveBeenCalledWith("generate_submit", { url_valid: true });
+    expect(trackEvent).toHaveBeenCalledWith(
+      "generate_success",
+      expect.objectContaining({ word_count: 5 }),
+    );
+  });
+
+  it("tracks generate_error with a useful error_type on failure", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+    render(<MemoryRouter><App /></MemoryRouter>);
+    typeUrl();
+    clickGenerate();
+    await screen.findByRole("alert");
+
+    expect(trackEvent).toHaveBeenCalledWith(
+      "generate_error",
+      expect.objectContaining({ error_type: "network" }),
+    );
+  });
+
+  it("tracks copy_article when the article is copied", async () => {
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: vi.fn().mockResolvedValue(undefined) },
+      configurable: true,
+      writable: true,
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ article: "T\n\nBody." }) }),
+    );
+    render(<MemoryRouter><App /></MemoryRouter>);
+    typeUrl();
+    clickGenerate();
+    await screen.findByLabelText("Generated article");
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy Article" }));
+    await screen.findByRole("button", { name: "Copied!" });
+
+    expect(trackEvent).toHaveBeenCalledWith("copy_article", { success: true });
+  });
+
+  it("tracks copy_article {success:false} when the clipboard write fails", async () => {
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: vi.fn().mockRejectedValue(new Error("denied")) },
+      configurable: true,
+      writable: true,
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ article: "T\n\nBody." }) }),
+    );
+    render(<MemoryRouter><App /></MemoryRouter>);
+    typeUrl();
+    clickGenerate();
+    await screen.findByLabelText("Generated article");
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy Article" }));
+    await screen.findByRole("alert");
+
+    expect(trackEvent).toHaveBeenCalledWith("copy_article", { success: false });
+  });
+
+  it("tracks nav_click on the nav links", () => {
+    render(<MemoryRouter><App /></MemoryRouter>);
+    fireEvent.click(screen.getByRole("link", { name: /About/i }));
+    expect(trackEvent).toHaveBeenCalledWith("nav_click", { target: "about" });
   });
 });
