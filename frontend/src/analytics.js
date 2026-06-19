@@ -19,8 +19,11 @@ function measurementId() {
   return import.meta.env.VITE_GA_MEASUREMENT_ID || "";
 }
 
+// Enabled only in a production build with an ID configured. Gating on PROD (not
+// just the env var) guarantees the no-op in dev/tests even if someone sets
+// VITE_GA_MEASUREMENT_ID locally — so localhost traffic can't pollute analytics.
 export function isAnalyticsEnabled() {
-  return Boolean(measurementId());
+  return Boolean(measurementId()) && Boolean(import.meta.env.PROD);
 }
 
 /**
@@ -28,10 +31,10 @@ export function isAnalyticsEnabled() {
  * already initialized. Safe to call on every mount.
  */
 export function initAnalytics() {
-  const id = measurementId();
-  if (!id || initialized || typeof window === "undefined" || typeof document === "undefined") {
+  if (!isAnalyticsEnabled() || initialized || typeof window === "undefined" || typeof document === "undefined") {
     return;
   }
+  const id = measurementId();
   initialized = true;
 
   const script = document.createElement("script");
@@ -50,7 +53,9 @@ export function initAnalytics() {
   window.gtag("config", id, { send_page_view: false });
 
   // Make otherwise-invisible client errors observable (issue #45 — visibility
-  // when things go wrong).
+  // when things go wrong). These listeners intentionally live for the page
+  // lifetime: initAnalytics runs once (guarded above), the app is never
+  // unmounted in production, and there's nothing to tear down.
   window.addEventListener("error", (event) => {
     trackEvent("exception", { description: truncate(event.message), fatal: false });
   });

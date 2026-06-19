@@ -56,9 +56,12 @@ export async function generateArticle(url) {
     } catch {
       detail = null;
     }
+    // Split client (4xx) vs server (5xx) so the error_type alone is meaningful
+    // in dashboards; the exact code rides along in `status`.
+    const type = response.status >= 500 ? "http_server" : "http_client";
     throw apiError(
       detail || `Something went wrong (error ${response.status}).`,
-      "http",
+      type,
       { status: response.status },
     );
   }

@@ -21,6 +21,12 @@ function isValidYouTubeUrl(urlString) {
   }
 }
 
+// Single source of truth for word count — used by both the displayed reading
+// stats and the generate_success analytics event, so they can't drift.
+function countWords(text) {
+  return text.trim() ? text.trim().split(/\s+/).length : 0;
+}
+
 export default function App() {
   const [url, setUrl] = useState("");
   const [article, setArticle] = useState("");
@@ -53,7 +59,7 @@ export default function App() {
 
   // Cheap reading stats for the result header (the prompt targets ~550–750 words).
   const stats = useMemo(() => {
-    const words = article.trim() ? article.trim().split(/\s+/).length : 0;
+    const words = countWords(article);
     return { words, minutes: Math.max(1, Math.round(words / 200)) };
   }, [article]);
 
@@ -71,10 +77,9 @@ export default function App() {
     try {
       const result = await generateArticle(trimmed);
       setArticle(result);
-      const wordCount = result.trim() ? result.trim().split(/\s+/).length : 0;
       trackEvent("generate_success", {
         latency_ms: Date.now() - startedAt,
-        word_count: wordCount,
+        word_count: countWords(result),
       });
     } catch (err) {
       setError(err.message);

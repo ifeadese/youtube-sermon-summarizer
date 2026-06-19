@@ -410,6 +410,12 @@ describe("Analytics events", () => {
     expect(trackPageView).toHaveBeenCalledWith("/");
   });
 
+  it("tracks a page_view on SPA route change", () => {
+    render(<MemoryRouter initialEntries={["/"]}><App /></MemoryRouter>);
+    fireEvent.click(screen.getByRole("link", { name: /About/i }));
+    expect(trackPageView).toHaveBeenCalledWith("/about");
+  });
+
   it("tracks generate_submit and generate_success on a successful generation", async () => {
     vi.stubGlobal(
       "fetch",
@@ -462,6 +468,27 @@ describe("Analytics events", () => {
     await screen.findByRole("button", { name: "Copied!" });
 
     expect(trackEvent).toHaveBeenCalledWith("copy_article", { success: true });
+  });
+
+  it("tracks copy_article {success:false} when the clipboard write fails", async () => {
+    Object.defineProperty(navigator, "clipboard", {
+      value: { writeText: vi.fn().mockRejectedValue(new Error("denied")) },
+      configurable: true,
+      writable: true,
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ article: "T\n\nBody." }) }),
+    );
+    render(<MemoryRouter><App /></MemoryRouter>);
+    typeUrl();
+    clickGenerate();
+    await screen.findByLabelText("Generated article");
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy Article" }));
+    await screen.findByRole("alert");
+
+    expect(trackEvent).toHaveBeenCalledWith("copy_article", { success: false });
   });
 
   it("tracks nav_click on the nav links", () => {

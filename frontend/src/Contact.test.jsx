@@ -85,7 +85,7 @@ describe("Contact page", () => {
 
     expect(await screen.findByRole("alert")).toBeInTheDocument();
     expect(trackEvent).toHaveBeenCalledWith("contact_error", expect.objectContaining({
-      description: expect.any(String),
+      error_type: "submit_failed",
     }));
   });
 });

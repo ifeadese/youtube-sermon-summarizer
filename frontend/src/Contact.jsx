@@ -28,10 +28,11 @@ export default function Contact() {
 
   const error = submitStatus.type === "error" ? submitStatus.message : null;
 
-  // Surface submission failures to analytics (observability).
+  // Surface submission failures to analytics (observability). All *_error events
+  // share an `error_type`; `description` rides along as optional context.
   useEffect(() => {
     if (submitStatus.type === "error") {
-      trackEvent("contact_error", { description: submitStatus.message });
+      trackEvent("contact_error", { error_type: "submit_failed", description: submitStatus.message });
     }
   }, [submitStatus]);
 
