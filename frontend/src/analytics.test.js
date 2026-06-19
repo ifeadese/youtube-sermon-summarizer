@@ -95,5 +95,15 @@ describe("analytics adapter", () => {
       "exception",
       expect.objectContaining({ description: "boom", fatal: false }),
     );
+
+    // An unhandled promise rejection does too (its reason's message is used).
+    window.dispatchEvent(
+      Object.assign(new Event("unhandledrejection"), { reason: new Error("async boom") }),
+    );
+    expect(gtag).toHaveBeenCalledWith(
+      "event",
+      "exception",
+      expect.objectContaining({ description: "async boom", fatal: false }),
+    );
   });
 });
