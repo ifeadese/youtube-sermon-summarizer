@@ -2,6 +2,15 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 
 import Contact from "./Contact.jsx";
+import { trackEvent } from "./analytics.js";
+
+vi.mock("./analytics.js", () => ({
+  trackEvent: vi.fn(),
+}));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -62,6 +71,9 @@ describe("Contact page", () => {
     const [, opts] = fetchMock.mock.calls[0];
     expect(opts.method).toBe("POST");
     expect(JSON.parse(opts.body)).toMatchObject({ name: "Jane Doe", email: "jane@example.com" });
+    // Analytics: submit + success.
+    expect(trackEvent).toHaveBeenCalledWith("contact_submit");
+    expect(trackEvent).toHaveBeenCalledWith("contact_success");
   });
 
   it("shows an error message when submission fails", async () => {
@@ -72,5 +84,8 @@ describe("Contact page", () => {
     fireEvent.submit(screen.getByRole("button", { name: /Send Message/i }).closest("form"));
 
     expect(await screen.findByRole("alert")).toBeInTheDocument();
+    expect(trackEvent).toHaveBeenCalledWith("contact_error", expect.objectContaining({
+      description: expect.any(String),
+    }));
   });
 });

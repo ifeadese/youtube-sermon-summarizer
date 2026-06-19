@@ -6,6 +6,15 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000
 // cold starts before giving up rather than spinning forever.
 const REQUEST_TIMEOUT_MS = 120_000;
 
+// Build an Error carrying a stable `type` (and optional HTTP `status`) so the UI
+// can report a useful error_type to analytics without matching on message text.
+function apiError(message, type, { cause, status } = {}) {
+  const error = cause ? new Error(message, { cause }) : new Error(message);
+  error.type = type;
+  if (status) error.status = status;
+  return error;
+}
+
 /**
  * Call POST /summarize and return the generated article text.
  * Throws an Error with a user-friendly message on any failure (network,
@@ -25,11 +34,12 @@ export async function generateArticle(url) {
     });
   } catch (err) {
     if (err?.name === "AbortError") {
-      throw new Error("This took too long and was cancelled. Please try again.", { cause: err });
+      throw apiError("This took too long and was cancelled. Please try again.", "timeout", { cause: err });
     }
     // Network-level failure (backend down, DNS, CORS preflight blocked, etc.)
-    throw new Error(
+    throw apiError(
       "Could not reach the server. Please check your connection and try again.",
+      "network",
       { cause: err },
     );
   } finally {
@@ -46,7 +56,11 @@ export async function generateArticle(url) {
     } catch {
       detail = null;
     }
-    throw new Error(detail || `Something went wrong (error ${response.status}).`);
+    throw apiError(
+      detail || `Something went wrong (error ${response.status}).`,
+      "http",
+      { status: response.status },
+    );
   }
 
   // Validate the success payload — a 200 with a non-JSON body (e.g. a proxy
@@ -56,14 +70,14 @@ export async function generateArticle(url) {
   try {
     data = await response.json();
   } catch (err) {
-    throw new Error("The server returned an unexpected response. Please try again.", {
+    throw apiError("The server returned an unexpected response. Please try again.", "bad_response", {
       cause: err,
     });
   }
 
   const article = typeof data?.article === "string" ? data.article.trim() : "";
   if (!article) {
-    throw new Error("The server returned an empty article. Please try again.");
+    throw apiError("The server returned an empty article. Please try again.", "empty_article");
   }
   return article;
 }

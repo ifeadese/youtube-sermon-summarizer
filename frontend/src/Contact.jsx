@@ -1,7 +1,8 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useFormSubmission } from "./hooks/useFormSubmission.js";
 import { DEFAULT_FORMBOLD_SUBMIT_URL } from "./lib/formbold.js";
+import { trackEvent } from "./analytics.js";
 
 const INITIAL_FORM_DATA = {
   name: "",
@@ -19,12 +20,25 @@ export default function Contact() {
       submitEndpoint: DEFAULT_FORMBOLD_SUBMIT_URL,
       successMessage:
         "Thank you for reaching out! We'll get back to you shortly.",
+      onSuccess: () => trackEvent("contact_success"),
     });
 
   const [confirming, setConfirming] = useState(false);
   const confirmTimer = useRef(null);
 
   const error = submitStatus.type === "error" ? submitStatus.message : null;
+
+  // Surface submission failures to analytics (observability).
+  useEffect(() => {
+    if (submitStatus.type === "error") {
+      trackEvent("contact_error", { description: submitStatus.message });
+    }
+  }, [submitStatus]);
+
+  function handleTrackedSubmit(event) {
+    trackEvent("contact_submit");
+    handleSubmit(event);
+  }
 
   function handleButtonClick(event) {
     if (isSubmitting) return;
@@ -84,7 +98,7 @@ export default function Contact() {
         </div>
       )}
 
-      <form className="contact-form" onSubmit={handleSubmit}>
+      <form className="contact-form" onSubmit={handleTrackedSubmit}>
         <div className="contact-field">
           <label htmlFor="contact-name" className="contact-label">
             Name <span className="contact-required" aria-hidden="true">*</span>
