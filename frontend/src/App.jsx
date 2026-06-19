@@ -3,13 +3,12 @@ import { Routes, Route, Link, NavLink } from "react-router-dom";
 
 import { generateArticle } from "./api.js";
 import About from "./About.jsx";
+import Contact from "./Contact.jsx";
 import "./App.css";
 
 // Working brand name for the text logo. Swap to the final product name once the
 // domain/naming decision (issue #34) lands.
 const BRAND = "Sermon Summarizer";
-// Placeholder until the real contact email is provided (issue #35). Swap before merge.
-const CONTACT_EMAIL = "hello@example.com";
 
 function isValidYouTubeUrl(urlString) {
   try {
@@ -91,12 +90,18 @@ export default function App() {
           >
             About
           </NavLink>
-          <a href={`mailto:${CONTACT_EMAIL}`}>Contact</a>
+          <NavLink
+            to="/contact"
+            className={({ isActive }) => `nav-btn ${isActive ? "nav-btn--active" : ""}`}
+          >
+            Contact
+          </NavLink>
         </nav>
       </header>
 
       <Routes>
         <Route path="/about" element={<About />} />
+        <Route path="/contact" element={<Contact />} />
         <Route path="/" element={
           <main className="hero" id="top">
           <div className="hero__inner">
