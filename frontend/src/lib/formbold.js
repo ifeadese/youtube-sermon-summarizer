@@ -4,7 +4,7 @@
  * Ported from onehub/lib/formbold.ts.
  */
 
-export const DEFAULT_FORMBOLD_SUBMIT_URL = "https://formbold.com/s/3GLXp";
+export const DEFAULT_FORMBOLD_SUBMIT_URL = "https://formbold.com/s/obYky";
 
 async function readResponseMessage(response) {
   const contentType = response.headers.get("content-type") ?? "";
