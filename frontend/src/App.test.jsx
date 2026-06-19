@@ -22,7 +22,7 @@ describe("App", () => {
   it("renders the app heading (the #8 acceptance criterion)", () => {
     render(<MemoryRouter><App /></MemoryRouter>);
     expect(
-      screen.getByRole("heading", { name: "sermon summarizer" }),
+      screen.getByRole("heading", { name: "Sermon Summarizer" }),
     ).toBeInTheDocument();
   });
 
@@ -355,13 +355,13 @@ describe("About page", () => {
   it("navigates to About page on clicking About button, hides the main form, and displays About content", () => {
     render(<MemoryRouter><App /></MemoryRouter>);
     
-    expect(screen.getByRole("heading", { name: "sermon summarizer" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Sermon Summarizer" })).toBeInTheDocument();
     expect(screen.getByLabelText("YouTube URL")).toBeInTheDocument();
     
     const aboutBtn = screen.getByRole("link", { name: /About/i });
     fireEvent.click(aboutBtn);
     
-    expect(screen.queryByRole("heading", { name: "sermon summarizer" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Sermon Summarizer" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("YouTube URL")).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "About Sermon Summarizer" })).toBeInTheDocument();
   });
@@ -373,7 +373,7 @@ describe("About page", () => {
     expect(screen.getByRole("heading", { name: "About Sermon Summarizer" })).toBeInTheDocument();
     
     fireEvent.click(screen.getByRole("link", { name: /Sermon Summarizer home/i }));
-    expect(screen.getByRole("heading", { name: "sermon summarizer" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Sermon Summarizer" })).toBeInTheDocument();
   });
 });
 

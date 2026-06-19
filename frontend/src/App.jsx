@@ -107,7 +107,10 @@ export default function App() {
                 </span>
                 Sermon → Article
               </span>
-              <h1>sermon summarizer</h1>
+              <h1>
+                <span>Sermon</span>{" "}
+                <span>Summarizer</span>
+              </h1>
               <p className="tagline">
                 Paste a captioned YouTube sermon link and get a clean, ready-to-publish article.
               </p>

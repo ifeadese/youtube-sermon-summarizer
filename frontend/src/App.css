@@ -132,6 +132,11 @@
   text-wrap: balance;
 }
 
+.app h1 span,
+.header h1 span {
+  display: block;
+}
+
 .tagline {
   margin: 0.9rem auto 0;
   max-width: 32rem;
