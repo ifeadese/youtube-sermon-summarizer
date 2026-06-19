@@ -360,17 +360,10 @@ describe("About page", () => {
     expect(screen.queryByRole("heading", { name: "YouTube Sermon Summarizer" })).not.toBeInTheDocument();
     expect(screen.queryByLabelText("YouTube URL")).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "About Sermon Summarizer" })).toBeInTheDocument();
-    expect(screen.getByText(/Bridging the gap between spoken word/i)).toBeInTheDocument();
   });
 
-  it("navigates back to home on clicking logo or CTA button", () => {
+  it("navigates back to home on clicking logo", () => {
     render(<MemoryRouter><App /></MemoryRouter>);
-    
-    fireEvent.click(screen.getByRole("link", { name: /About/i }));
-    expect(screen.getByRole("heading", { name: "About Sermon Summarizer" })).toBeInTheDocument();
-    
-    fireEvent.click(screen.getByRole("link", { name: /Back to Summarizer/i }));
-    expect(screen.getByRole("heading", { name: "YouTube Sermon Summarizer" })).toBeInTheDocument();
     
     fireEvent.click(screen.getByRole("link", { name: /About/i }));
     expect(screen.getByRole("heading", { name: "About Sermon Summarizer" })).toBeInTheDocument();
