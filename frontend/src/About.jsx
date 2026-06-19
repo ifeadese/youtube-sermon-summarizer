@@ -1,4 +1,6 @@
-export default function About({ onBackToHome }) {
+import { Link } from "react-router-dom";
+
+export default function About() {
   return (
     <main className="about-page">
       <div className="about-hero">
@@ -31,9 +33,9 @@ export default function About({ onBackToHome }) {
       </div>
 
       <div className="about-cta">
-        <button type="button" className="generate-btn" onClick={onBackToHome}>
+        <Link to="/" className="generate-btn" style={{ display: "inline-block", textDecoration: "none", textAlign: "center" }}>
           Back to Summarizer
-        </button>
+        </Link>
       </div>
     </main>
   );

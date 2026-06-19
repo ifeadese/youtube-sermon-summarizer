@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Routes, Route, Link, NavLink } from "react-router-dom";
 
 import { generateArticle } from "./api.js";
 import About from "./About.jsx";
@@ -13,7 +14,6 @@ const CONTACT_EMAIL = "hello@example.com";
 
 
 export default function App() {
-  const [view, setView] = useState("home");
   const [url, setUrl] = useState("");
   const [article, setArticle] = useState("");
   const [loading, setLoading] = useState(false);
@@ -70,36 +70,27 @@ export default function App() {
   return (
     <div className="page">
       <header className="topbar">
-        <a
-          className="brand"
-          href="#top"
-          onClick={(e) => {
-            e.preventDefault();
-            setView("home");
-          }}
-          aria-label={`${BRAND} home`}
-        >
+        <Link className="brand" to="/" aria-label={`${BRAND} home`}>
           <span className="brand__mark" aria-hidden="true">
             ✦
           </span>
           {BRAND}
-        </a>
+        </Link>
         <nav className="nav" aria-label="Primary">
-          <button
-            type="button"
-            className={`nav-btn ${view === "about" ? "nav-btn--active" : ""}`}
-            onClick={() => setView("about")}
+          <NavLink
+            to="/about"
+            className={({ isActive }) => `nav-btn ${isActive ? "nav-btn--active" : ""}`}
           >
             About
-          </button>
+          </NavLink>
           <a href={`mailto:${CONTACT_EMAIL}`}>Contact</a>
         </nav>
       </header>
 
-      {view === "about" ? (
-        <About onBackToHome={() => setView("home")} />
-      ) : (
-        <main className="hero" id="top">
+      <Routes>
+        <Route path="/about" element={<About />} />
+        <Route path="/" element={
+          <main className="hero" id="top">
           <div className="hero__inner">
             <div className="header">
               <span className="wordmark">
@@ -190,8 +181,9 @@ export default function App() {
 
 
           </div>
-        </main>
-      )}
+          </main>
+        } />
+      </Routes>
 
 
 

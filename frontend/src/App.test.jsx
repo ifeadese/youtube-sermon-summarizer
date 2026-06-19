@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, act, within } from "@testing-library/react";
 
+import { MemoryRouter } from "react-router-dom";
 import App from "./App.jsx";
 
 const URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
@@ -19,14 +20,14 @@ afterEach(() => {
 
 describe("App", () => {
   it("renders the app heading (the #8 acceptance criterion)", () => {
-    render(<App />);
+    render(<MemoryRouter><App /></MemoryRouter>);
     expect(
       screen.getByRole("heading", { name: "YouTube Sermon Summarizer" }),
     ).toBeInTheDocument();
   });
 
   it("disables the button until a URL is entered", () => {
-    render(<App />);
+    render(<MemoryRouter><App /></MemoryRouter>);
     const button = screen.getByRole("button", { name: "Generate Article" });
     expect(button).toBeDisabled();
     typeUrl();
@@ -41,7 +42,7 @@ describe("App", () => {
         json: async () => ({ article: "My Title\n\nA fine article." }),
       }),
     );
-    render(<App />);
+    render(<MemoryRouter><App /></MemoryRouter>);
     typeUrl();
     clickGenerate();
 
@@ -59,7 +60,7 @@ describe("App", () => {
         json: async () => ({ detail: "No transcript available for this video." }),
       }),
     );
-    render(<App />);
+    render(<MemoryRouter><App /></MemoryRouter>);
     typeUrl();
     clickGenerate();
 
@@ -70,7 +71,7 @@ describe("App", () => {
 
   it("shows a reachability message when the request fails at the network level", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
-    render(<App />);
+    render(<MemoryRouter><App /></MemoryRouter>);
     typeUrl();
     clickGenerate();
 
@@ -80,7 +81,7 @@ describe("App", () => {
   it("shows a timeout message when the request is aborted", async () => {
     const abortErr = Object.assign(new Error("aborted"), { name: "AbortError" });
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(abortErr));
-    render(<App />);
+    render(<MemoryRouter><App /></MemoryRouter>);
     typeUrl();
     clickGenerate();
 
@@ -97,7 +98,7 @@ describe("App", () => {
         },
       }),
     );
-    render(<App />);
+    render(<MemoryRouter><App /></MemoryRouter>);
     typeUrl();
     clickGenerate();
 
@@ -114,7 +115,7 @@ describe("App", () => {
         json: async () => ({ article: { not: "a string" } }),
       }),
     );
-    render(<App />);
+    render(<MemoryRouter><App /></MemoryRouter>);
     typeUrl();
     clickGenerate();
 
@@ -129,7 +130,7 @@ describe("App", () => {
       json: async () => ({ article: "ok" }),
     });
     vi.stubGlobal("fetch", fetchMock);
-    render(<App />);
+    render(<MemoryRouter><App /></MemoryRouter>);
     typeUrl(`   ${URL}   `);
     clickGenerate();
 
@@ -144,7 +145,7 @@ describe("App", () => {
       .fn()
       .mockReturnValue(new Promise((resolve) => { resolveFetch = resolve; }));
     vi.stubGlobal("fetch", fetchMock);
-    render(<App />);
+    render(<MemoryRouter><App /></MemoryRouter>);
     typeUrl();
 
     const form = screen.getByLabelText("YouTube URL").closest("form");
@@ -163,7 +164,7 @@ describe("App", () => {
       "fetch",
       vi.fn().mockReturnValue(new Promise((resolve) => { resolveFetch = resolve; })),
     );
-    render(<App />);
+    render(<MemoryRouter><App /></MemoryRouter>);
     typeUrl();
     clickGenerate();
 
@@ -195,7 +196,7 @@ describe("Copy button", () => {
       "fetch",
       vi.fn().mockResolvedValue({ ok: true, json: async () => ({ article: ARTICLE }) }),
     );
-    render(<App />);
+    render(<MemoryRouter><App /></MemoryRouter>);
     fireEvent.change(screen.getByLabelText("YouTube URL"), {
       target: { value: "https://youtu.be/dQw4w9WgXcQ" },
     });
@@ -204,7 +205,7 @@ describe("Copy button", () => {
   }
 
   it("is not shown before an article exists, and appears after", async () => {
-    render(<App />);
+    render(<MemoryRouter><App /></MemoryRouter>);
     expect(screen.queryByRole("button", { name: /copy article/i })).not.toBeInTheDocument();
     // (cleanup of this render happens in afterEach)
   });
@@ -296,7 +297,7 @@ describe("Result meta (word count + reading time)", () => {
       "fetch",
       vi.fn().mockResolvedValue({ ok: true, json: async () => ({ article }) }),
     );
-    render(<App />);
+    render(<MemoryRouter><App /></MemoryRouter>);
     typeUrl();
     clickGenerate();
     await screen.findByLabelText("Generated article");
@@ -317,7 +318,7 @@ describe("Result meta (word count + reading time)", () => {
 
 describe("Tagline", () => {
   it("renders the consolidated tagline", () => {
-    render(<App />);
+    render(<MemoryRouter><App /></MemoryRouter>);
     expect(
       screen.getByText(/Paste a captioned YouTube sermon link and get a clean, ready-to-publish article/i),
     ).toBeInTheDocument();
@@ -327,10 +328,10 @@ describe("Tagline", () => {
 
 describe("Top nav", () => {
   it("renders the text logo and the nav links in the correct order", () => {
-    render(<App />);
+    render(<MemoryRouter><App /></MemoryRouter>);
     expect(screen.getByRole("link", { name: /Sermon Summarizer home/i })).toBeInTheDocument();
     const nav = screen.getByRole("navigation", { name: "Primary" });
-    const aboutBtn = within(nav).getByRole("button", { name: /About/i });
+    const aboutBtn = within(nav).getByRole("link", { name: /About/i });
     const contactLink = within(nav).getByRole("link", { name: /Contact/i });
     
     expect(aboutBtn).toBeInTheDocument();
@@ -339,7 +340,7 @@ describe("Top nav", () => {
   });
 
   it("makes Contact a mailto link", () => {
-    render(<App />);
+    render(<MemoryRouter><App /></MemoryRouter>);
     const nav = screen.getByRole("navigation", { name: "Primary" });
     const contact = within(nav).getByRole("link", { name: "Contact" });
     expect(contact.getAttribute("href")).toMatch(/^mailto:/);
@@ -348,12 +349,12 @@ describe("Top nav", () => {
 
 describe("About page", () => {
   it("navigates to About page on clicking About button, hides the main form, and displays About content", () => {
-    render(<App />);
+    render(<MemoryRouter><App /></MemoryRouter>);
     
     expect(screen.getByRole("heading", { name: "YouTube Sermon Summarizer" })).toBeInTheDocument();
     expect(screen.getByLabelText("YouTube URL")).toBeInTheDocument();
     
-    const aboutBtn = screen.getByRole("button", { name: /About/i });
+    const aboutBtn = screen.getByRole("link", { name: /About/i });
     fireEvent.click(aboutBtn);
     
     expect(screen.queryByRole("heading", { name: "YouTube Sermon Summarizer" })).not.toBeInTheDocument();
@@ -363,15 +364,15 @@ describe("About page", () => {
   });
 
   it("navigates back to home on clicking logo or CTA button", () => {
-    render(<App />);
+    render(<MemoryRouter><App /></MemoryRouter>);
     
-    fireEvent.click(screen.getByRole("button", { name: /About/i }));
+    fireEvent.click(screen.getByRole("link", { name: /About/i }));
     expect(screen.getByRole("heading", { name: "About Sermon Summarizer" })).toBeInTheDocument();
     
-    fireEvent.click(screen.getByRole("button", { name: /Back to Summarizer/i }));
+    fireEvent.click(screen.getByRole("link", { name: /Back to Summarizer/i }));
     expect(screen.getByRole("heading", { name: "YouTube Sermon Summarizer" })).toBeInTheDocument();
     
-    fireEvent.click(screen.getByRole("button", { name: /About/i }));
+    fireEvent.click(screen.getByRole("link", { name: /About/i }));
     expect(screen.getByRole("heading", { name: "About Sermon Summarizer" })).toBeInTheDocument();
     
     fireEvent.click(screen.getByRole("link", { name: /Sermon Summarizer home/i }));
@@ -381,7 +382,7 @@ describe("About page", () => {
 
 describe("Footer", () => {
   it("renders the footer with copyright and creator credit", () => {
-    render(<App />);
+    render(<MemoryRouter><App /></MemoryRouter>);
     const footer = screen.getByRole("contentinfo");
     expect(within(footer).getByText(/© 2026 Sermon Summarizer. All rights reserved./i)).toBeInTheDocument();
     expect(within(footer).getByText(/Made by/i)).toBeInTheDocument();
