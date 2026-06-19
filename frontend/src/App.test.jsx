@@ -343,11 +343,11 @@ describe("Top nav", () => {
     expect(aboutBtn.compareDocumentPosition(contactLink)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
-  it("makes Contact a mailto link", () => {
+  it("links Contact to the /contact page", () => {
     render(<MemoryRouter><App /></MemoryRouter>);
     const nav = screen.getByRole("navigation", { name: "Primary" });
     const contact = within(nav).getByRole("link", { name: "Contact" });
-    expect(contact.getAttribute("href")).toMatch(/^mailto:/);
+    expect(contact.getAttribute("href")).toBe("/contact");
   });
 });
 
