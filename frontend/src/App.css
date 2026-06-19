@@ -864,10 +864,61 @@
 }
 
 .contact-success__body {
-  margin: 0;
+  margin: 0 0 1.75rem;
   color: var(--ink-muted);
   font-size: 1rem;
   line-height: 1.55;
+}
+
+.contact-home-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.7rem 1.75rem;
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--plum);
+  background: transparent;
+  border: 2px solid var(--plum);
+  border-radius: var(--radius);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.contact-home-btn:hover {
+  background: var(--plum);
+  color: #fff;
+  box-shadow: 0 6px 16px -6px rgba(67, 32, 58, 0.35);
+}
+
+.contact-home-btn:active {
+  background: var(--plum-deep);
+  color: #fff;
+}
+
+.contact-home-btn:focus-visible {
+  outline: 3px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* Submit button – confirmation state (two-click submit) */
+.contact-submit--confirm {
+  background: linear-gradient(180deg, var(--gold) 0%, var(--gold-deep) 100%);
+  box-shadow: 0 8px 18px -8px rgba(200, 150, 46, 0.5);
+  animation: pulse-confirm 1s ease-in-out infinite;
+}
+
+.contact-submit--confirm:hover:not(:disabled) {
+  filter: brightness(1.05);
+  box-shadow: 0 12px 24px -10px rgba(200, 150, 46, 0.55);
+}
+
+@keyframes pulse-confirm {
+  0%, 100% { box-shadow: 0 8px 18px -8px rgba(200, 150, 46, 0.5); }
+  50% { box-shadow: 0 8px 24px -6px rgba(200, 150, 46, 0.7); }
 }
 
 /* Responsive: contact form on small screens */
@@ -890,7 +941,8 @@
   .error,
   .about-page,
   .contact-page,
-  .contact-success {
+  .contact-success,
+  .contact-submit--confirm {
     animation: none;
   }
 
@@ -904,6 +956,7 @@
   .url-input,
   .contact-submit,
   .contact-input,
+  .contact-home-btn,
   .nav a,
   .nav-btn {
     transition: none;

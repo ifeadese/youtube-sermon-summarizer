@@ -1,3 +1,5 @@
+import { useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { useFormSubmission } from "./hooks/useFormSubmission.js";
 import { DEFAULT_FORMBOLD_SUBMIT_URL } from "./lib/formbold.js";
 
@@ -8,6 +10,9 @@ const INITIAL_FORM_DATA = {
   message: "",
 };
 
+// How long the "Confirm?" state lingers before reverting (ms).
+const CONFIRM_TIMEOUT = 3000;
+
 export default function Contact() {
   const { formData, isSubmitting, submitStatus, handleChange, handleSubmit } =
     useFormSubmission(INITIAL_FORM_DATA, {
@@ -16,7 +21,26 @@ export default function Contact() {
         "Thank you for reaching out! We'll get back to you shortly.",
     });
 
+  const [confirming, setConfirming] = useState(false);
+  const confirmTimer = useRef(null);
+
   const error = submitStatus.type === "error" ? submitStatus.message : null;
+
+  function handleButtonClick(event) {
+    if (isSubmitting) return;
+
+    if (!confirming) {
+      // First click — enter confirmation state, don't submit yet.
+      event.preventDefault();
+      setConfirming(true);
+      clearTimeout(confirmTimer.current);
+      confirmTimer.current = setTimeout(() => setConfirming(false), CONFIRM_TIMEOUT);
+    } else {
+      // Second click — let the native form submit fire.
+      clearTimeout(confirmTimer.current);
+      setConfirming(false);
+    }
+  }
 
   if (submitStatus.type === "success") {
     return (
@@ -27,6 +51,9 @@ export default function Contact() {
           </span>
           <h2 className="contact-success__heading">Message Sent!</h2>
           <p className="contact-success__body">{submitStatus.message}</p>
+          <Link to="/" className="contact-home-btn">
+            Back to Home
+          </Link>
         </div>
       </main>
     );
@@ -121,17 +148,20 @@ export default function Contact() {
             id="contact-message"
             name="message"
             required
-            minLength={10}
             rows={6}
             value={formData.message}
             onChange={handleChange}
             className="contact-input contact-textarea"
             placeholder="Tell us what's on your mind…"
           />
-          <span className="contact-hint">Minimum 10 characters</span>
         </div>
 
-        <button type="submit" className="contact-submit" disabled={isSubmitting}>
+        <button
+          type="submit"
+          className={`contact-submit${confirming ? " contact-submit--confirm" : ""}`}
+          disabled={isSubmitting}
+          onClick={handleButtonClick}
+        >
           {isSubmitting ? (
             <>
               <span className="dots" aria-hidden="true">
@@ -141,6 +171,8 @@ export default function Contact() {
               </span>
               Sending…
             </>
+          ) : confirming ? (
+            "Confirm Send?"
           ) : (
             "Send Message"
           )}
