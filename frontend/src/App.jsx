@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Routes, Route, Link, NavLink } from "react-router-dom";
 
 import { generateArticle } from "./api.js";
 import About from "./About.jsx";
@@ -10,10 +11,17 @@ const BRAND = "Sermon Summarizer";
 // Placeholder until the real contact email is provided (issue #35). Swap before merge.
 const CONTACT_EMAIL = "hello@example.com";
 
-
+function isValidYouTubeUrl(urlString) {
+  try {
+    const parsed = new URL(urlString);
+    const host = parsed.hostname.replace(/^www\./, "");
+    return host === "youtube.com" || host === "youtu.be" || host === "m.youtube.com";
+  } catch {
+    return false;
+  }
+}
 
 export default function App() {
-  const [view, setView] = useState("home");
   const [url, setUrl] = useState("");
   const [article, setArticle] = useState("");
   const [loading, setLoading] = useState(false);
@@ -70,36 +78,27 @@ export default function App() {
   return (
     <div className="page">
       <header className="topbar">
-        <a
-          className="brand"
-          href="#top"
-          onClick={(e) => {
-            e.preventDefault();
-            setView("home");
-          }}
-          aria-label={`${BRAND} home`}
-        >
+        <Link className="brand" to="/" aria-label={`${BRAND} home`}>
           <span className="brand__mark" aria-hidden="true">
             ✦
           </span>
           {BRAND}
-        </a>
+        </Link>
         <nav className="nav" aria-label="Primary">
-          <button
-            type="button"
-            className={`nav-btn ${view === "about" ? "nav-btn--active" : ""}`}
-            onClick={() => setView("about")}
+          <NavLink
+            to="/about"
+            className={({ isActive }) => `nav-btn ${isActive ? "nav-btn--active" : ""}`}
           >
             About
-          </button>
+          </NavLink>
           <a href={`mailto:${CONTACT_EMAIL}`}>Contact</a>
         </nav>
       </header>
 
-      {view === "about" ? (
-        <About onBackToHome={() => setView("home")} />
-      ) : (
-        <main className="hero" id="top">
+      <Routes>
+        <Route path="/about" element={<About />} />
+        <Route path="/" element={
+          <main className="hero" id="top">
           <div className="hero__inner">
             <div className="header">
               <span className="wordmark">
@@ -108,7 +107,10 @@ export default function App() {
                 </span>
                 Sermon → Article
               </span>
-              <h1>YouTube Sermon Summarizer</h1>
+              <h1>
+                <span>Sermon</span>{" "}
+                <span>Summarizer</span>
+              </h1>
               <p className="tagline">
                 Paste a captioned YouTube sermon link and get a clean, ready-to-publish article.
               </p>
@@ -131,7 +133,7 @@ export default function App() {
                   aria-label="YouTube URL"
                 />
               </div>
-              <button type="submit" className="generate-btn" disabled={loading || !url.trim()}>
+              <button type="submit" className="generate-btn" disabled={loading || !isValidYouTubeUrl(url.trim())}>
                 {loading ? (
                   <>
                     <span className="dots" aria-hidden="true">
@@ -190,8 +192,9 @@ export default function App() {
 
 
           </div>
-        </main>
-      )}
+          </main>
+        } />
+      </Routes>
 
 
 

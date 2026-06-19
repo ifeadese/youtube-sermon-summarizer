@@ -1,4 +1,5 @@
-export default function About({ onBackToHome }) {
+
+export default function About() {
   return (
     <main className="about-page">
       <div className="about-hero">
@@ -7,14 +8,12 @@ export default function About({ onBackToHome }) {
           Our Vision
         </span>
         <h1 className="about-title">About Sermon Summarizer</h1>
-        <p className="about-subtitle">
-          Bridging the gap between spoken word and the written page. We help ministries amplify their message.
-        </p>
+
       </div>
 
       <div className="about-mission">
         <div className="about-mission__card">
-          <h2>Our Purpose</h2>
+
           <p>
             Sermons are rich with wisdom, guidance, and inspiration, but their impact is often confined to the hour of delivery or lost inside hours of video archives.
           </p>
@@ -30,11 +29,7 @@ export default function About({ onBackToHome }) {
         </div>
       </div>
 
-      <div className="about-cta">
-        <button type="button" className="generate-btn" onClick={onBackToHome}>
-          Back to Summarizer
-        </button>
-      </div>
+
     </main>
   );
 }
