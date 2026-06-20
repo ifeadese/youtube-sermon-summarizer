@@ -1,4 +1,4 @@
-# Backend — YouTube Sermon Summarizer
+# Backend — Sermon Summarizer
 
 FastAPI server for the sermon summarizer. All commands below are run **from this `backend/` directory.**
 

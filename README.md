@@ -1,4 +1,4 @@
-# YouTube Sermon Summarizer
+# Sermon Summarizer
 
 A simple web app that turns a YouTube sermon into a ready-to-publish blog article — in one click.
 
