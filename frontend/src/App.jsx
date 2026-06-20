@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Routes, Route, Link, NavLink, useLocation } from "react-router-dom";
+import { Copy, Check, FileEdit, AlertCircle } from "lucide-react";
 
 import { generateArticle } from "./api.js";
 import { initAnalytics, trackEvent, trackPageView } from "./analytics.js";
@@ -33,6 +34,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
 
   // In-flight guard. A ref updates synchronously (unlike `loading` state, which
   // is stale within the same render), so a rapid second submit — e.g. two Enter
@@ -71,6 +73,7 @@ export default function App() {
     setError("");
     setArticle("");
     setCopied(false);
+    setIsEditing(false);
     const trimmed = url.trim();
     trackEvent("generate_submit", { url_valid: isValidYouTubeUrl(trimmed) });
     const startedAt = Date.now();
@@ -201,12 +204,14 @@ export default function App() {
             )}
 
             {error && (
-              <p className="error" role="alert">
-                <span className="error__icon" aria-hidden="true">
-                  !
-                </span>
-                {error}
-              </p>
+              <div className="error-container">
+                <div className="error" role="alert">
+                  <span className="error__icon" aria-hidden="true">
+                    <AlertCircle size={16} strokeWidth={3} />
+                  </span>
+                  {error}
+                </div>
+              </div>
             )}
 
             {article && (
@@ -215,12 +220,20 @@ export default function App() {
                   <span className="result-meta">
                     {stats.words.toLocaleString()} words · {stats.minutes} min read
                   </span>
-                  <button type="button" className="copy-btn" onClick={handleCopy}>
-                    <span className="copy-btn__icon" aria-hidden="true">
-                      {copied ? "✓" : "⧉"}
-                    </span>
-                    {copied ? "Copied!" : "Copy Article"}
-                  </button>
+                  <div className="result-actions">
+                    <button
+                      type="button"
+                      className="action-btn"
+                      onClick={() => setIsEditing(!isEditing)}
+                    >
+                      <FileEdit size={16} />
+                      {isEditing ? "Done Editing" : "Edit Text"}
+                    </button>
+                    <button type="button" className="action-btn" onClick={handleCopy}>
+                      {copied ? <Check size={16} /> : <Copy size={16} />}
+                      {copied ? "Copied!" : "Copy Text"}
+                    </button>
+                  </div>
                   <span className="visually-hidden" aria-live="polite">
                     {copied ? "Article copied to clipboard" : ""}
                   </span>
@@ -228,9 +241,18 @@ export default function App() {
                 {/* Fixed-height, vertically-scrollable so a long article scrolls
                     inside its box instead of stretching the page. */}
                 <div className="article-scroll">
-                  <article className="article" aria-label="Generated article">
-                    {article}
-                  </article>
+                  {isEditing ? (
+                    <textarea
+                      className="article-textarea"
+                      value={article}
+                      onChange={(e) => setArticle(e.target.value)}
+                      aria-label="Edit article"
+                    />
+                  ) : (
+                    <article className="article" aria-label="Generated article">
+                      {article}
+                    </article>
+                  )}
                 </div>
               </section>
             )}
