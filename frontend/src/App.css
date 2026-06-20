@@ -290,18 +290,28 @@
   color: var(--ink-faint);
 }
 
+.error-container {
+  display: flex;
+  flex-direction: column;
+  margin-top: clamp(1.5rem, 4vw, 2.25rem);
+  padding: 0.6rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  animation: rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
 .error {
   display: flex;
   align-items: flex-start;
   gap: 0.65rem;
-  margin: 1.4rem 0 0;
   padding: 0.85rem 1rem;
   color: var(--error-ink);
   background: var(--error-bg);
   border: 1px solid var(--error-border);
   border-radius: var(--radius);
   font-size: 0.96rem;
-  animation: fade 0.3s ease both;
 }
 
 .error__icon {
@@ -332,7 +342,15 @@
 
 /* ── Result ──────────────────────────────────────────────────────────────── */
 .result {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
   margin-top: clamp(1.5rem, 4vw, 2.25rem);
+  padding: 0.6rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
   animation: rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
@@ -341,46 +359,46 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  margin-bottom: 0.75rem;
+  padding: 0 0.5rem;
 }
 
 .result-meta {
-  font-size: 0.82rem;
+  font-size: 0.85rem;
   font-weight: 500;
   letter-spacing: 0.02em;
-  color: var(--ink-faint);
+  color: var(--ink-muted);
 }
 
-.copy-btn {
+.result-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.action-btn {
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
-  padding: 0.5rem 1rem;
+  padding: 0.5rem 0.85rem;
   font-family: inherit;
   font-size: 0.9rem;
   font-weight: 600;
   color: var(--plum);
   background: var(--surface);
   border: 1px solid var(--border-strong);
-  border-radius: 999px;
+  border-radius: var(--radius);
   cursor: pointer;
-  transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease,
-    box-shadow 0.16s ease;
+  transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
 }
 
-.copy-btn__icon {
-  font-size: 0.95rem;
-  line-height: 1;
-}
-
-.copy-btn:hover {
+.action-btn:hover {
   background: var(--plum);
   color: #fff;
   transform: translateY(-1px);
   box-shadow: var(--shadow-sm);
 }
 
-.copy-btn:focus-visible {
+.action-btn:focus-visible {
   outline: 3px solid var(--gold);
   outline-offset: 2px;
 }
@@ -391,29 +409,45 @@
 .article-scroll {
   max-height: clamp(18rem, 48vh, 34rem);
   overflow-y: auto;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--gold);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
+  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.article-scroll:focus-within {
+  border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(200, 150, 46, 0.22);
 }
 
 .article-scroll--example {
   max-height: clamp(16rem, 40vh, 28rem);
-  box-shadow: var(--shadow-md);
 }
 
 .article {
   margin: 0;
   padding: clamp(1.5rem, 4vw, 2.5rem);
-  /* Preserve the plain-text paragraph/heading line breaks from the API. */
   white-space: pre-wrap;
-  /* Serif body for a warm, readable, magazine-like reading experience. */
   font-family: var(--font-serif);
   font-size: clamp(1.04rem, 2.2vw, 1.16rem);
   line-height: 1.75;
   color: var(--ink);
   overflow-wrap: break-word;
+}
+
+.article-textarea {
+  width: 100%;
+  min-height: 24rem;
+  padding: clamp(1.5rem, 4vw, 2.5rem);
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: clamp(1.04rem, 2.2vw, 1.16rem);
+  line-height: 1.75;
+  color: var(--ink);
+  border: none;
+  resize: vertical;
+  background: transparent;
+  outline: none;
 }
 
 /* The model emits the title on the first line, so give the first *rendered*
