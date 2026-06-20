@@ -28,7 +28,7 @@ state so it never competes with a generated result. Reuse the existing CSS desig
 tokens and idle-gating pattern; introduce no router and no new dependencies.
 
 All existing test / accessibility contracts stay unchanged: h1 text
-(`YouTube Sermon Summarizer`), input/article `aria-label`s, button names, the
+(`Sermon Summarizer`), input/article `aria-label`s, button names, the
 `role="status"` / `role="alert"` regions, the idle-hint regex
 (`/Works with any public YouTube sermon/i`), and the `words · min read` meta.
 

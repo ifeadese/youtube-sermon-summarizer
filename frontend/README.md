@@ -1,4 +1,4 @@
-# Frontend — YouTube Sermon Summarizer
+# Frontend — Sermon Summarizer
 
 A single-page React app (built with Vite): paste a YouTube URL, click Generate,
 and the article from the backend's `/summarize` endpoint renders below.

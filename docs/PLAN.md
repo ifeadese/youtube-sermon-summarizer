@@ -1,4 +1,4 @@
-# YouTube Sermon Summarizer — MVP Plan
+# Sermon Summarizer — MVP Plan
 
 Product thinking doc • June 2026
 
@@ -298,7 +298,7 @@ Create a React app using Vite (a fast build tool that bundles your code for the 
 
 **Acceptance criteria:**
 - `npm run dev` in `frontend/` starts the app
-- Browser shows "YouTube Sermon Summarizer" heading
+- Browser shows "Sermon Summarizer" heading
 - Uses plain CSS (no complex UI framework needed)
 
 **Key steps:**

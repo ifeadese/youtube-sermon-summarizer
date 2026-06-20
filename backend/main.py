@@ -1,4 +1,4 @@
-"""YouTube Sermon Summarizer — FastAPI backend.
+"""Sermon Summarizer — FastAPI backend.
 
 Entry point for the API server. Exposes a health check, a /transcript route
 (dev/debug), and /summarize — the main endpoint that turns a YouTube URL into a
@@ -30,7 +30,7 @@ load_dotenv(Path(__file__).resolve().parent / ".env")
 # last-resort handler. No-op if logging is already configured (e.g. by uvicorn).
 logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s")
 
-app = FastAPI(title="YouTube Sermon Summarizer")
+app = FastAPI(title="Sermon Summarizer")
 
 # Which frontend origins may call this API. Defaults to the local dev servers
 # (Vite 5173, CRA 3000); override with ALLOWED_ORIGINS (comma-separated) at

@@ -83,9 +83,9 @@ export default function Contact() {
           </span>
           Get in Touch
         </span>
-        <h1 className="contact-title">Contact Us</h1>
+        <h1 className="contact-title">Contact</h1>
         <p className="contact-subtitle">
-          Have a question, feedback, or want to partner with us? We'd love to
+          Have a question, feedback, or something to share with us? We'd love to
           hear from you.
         </p>
       </div>
