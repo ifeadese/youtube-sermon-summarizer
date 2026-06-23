@@ -2,6 +2,8 @@
 
 A simple web app that turns a YouTube sermon into a ready-to-publish blog article — in one click.
 
+![Sermon Summarizer Home Page](docs/screenshot.png)
+
 ## What It Does
 
 Paste a YouTube URL, get a clean, well-written article back. No manual transcript extraction, no copy-pasting between tools, no inconsistent LLM outputs.
