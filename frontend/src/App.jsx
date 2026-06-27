@@ -61,6 +61,7 @@ export default function App() {
   const [copied, setCopied] = useState(false);
 
   const [isNavOpen, setIsNavOpen] = useState(false);
+  const [prevPathname, setPrevPathname] = useState(null);
 
   // In-flight guard. A ref updates synchronously (unlike `loading` state, which
   // is stale within the same render), so a rapid second submit — e.g. two Enter
@@ -72,6 +73,11 @@ export default function App() {
 
   const location = useLocation();
 
+  if (location.pathname !== prevPathname) {
+    setPrevPathname(location.pathname);
+    setIsNavOpen(false);
+  }
+
   // Load analytics once (no-op unless VITE_GA_MEASUREMENT_ID is set).
   useEffect(() => {
     initAnalytics();
@@ -80,7 +86,6 @@ export default function App() {
   // SPA navigations don't fire a page_view on their own — send one per route.
   useEffect(() => {
     trackPageView(location.pathname);
-    setIsNavOpen(false); // Close mobile nav on route change
   }, [location.pathname]);
 
   // Clear any pending "Copied!" reset timer when the component unmounts.
