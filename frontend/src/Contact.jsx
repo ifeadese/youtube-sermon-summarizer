@@ -66,7 +66,7 @@ export default function Contact() {
           </span>
           <h2 className="contact-success__heading">Message Sent!</h2>
           <p className="contact-success__body">{submitStatus.message}</p>
-          <Link to="/" className="contact-home-btn">
+          <Link to="/" className="contact-home-btn" onClick={() => trackEvent("nav_click", { target: "home" })}>
             Back to Home
           </Link>
         </div>

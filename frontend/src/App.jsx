@@ -224,7 +224,10 @@ export default function App() {
                     <button
                       type="button"
                       className="action-btn"
-                      onClick={() => setIsEditing(!isEditing)}
+                      onClick={() => {
+                        setIsEditing(!isEditing);
+                        trackEvent("edit_article", { action: isEditing ? "close" : "open" });
+                      }}
                     >
                       <FileEdit size={16} />
                       {isEditing ? "Done Editing" : "Edit Text"}
@@ -270,7 +273,7 @@ export default function App() {
           &copy; 2026 {BRAND}. All rights reserved.
         </span>
         <span className="footer__credit">
-          Made by <a href="https://ifeadese.com" target="_blank" rel="noopener noreferrer">Ife Adese</a>
+          Made by <a href="https://ifeadese.com" target="_blank" rel="noopener noreferrer" onClick={() => trackEvent("outbound_click", { link_url: "https://ifeadese.com" })}>Ife Adese</a>
         </span>
       </footer>
     </div>
