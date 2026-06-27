@@ -41,16 +41,17 @@ describe("App", () => {
     ).toBeInTheDocument();
   });
 
-  it("disables the button until a valid YouTube URL is entered", () => {
+  it("shows an error and tracks invalid_url_attempt when submitting an invalid URL", async () => {
     render(<MemoryRouter><App /></MemoryRouter>);
     const button = screen.getByRole("button", { name: "Generate Article" });
-    expect(button).toBeDisabled();
+    expect(button).toBeDisabled(); // disabled when empty
+    
     typeUrl("https://example.com/not-youtube");
-    expect(button).toBeDisabled();
-    typeUrl("not-a-url");
-    expect(button).toBeDisabled();
-    typeUrl();
-    expect(button).toBeEnabled();
+    expect(button).toBeEnabled(); // enabled when not empty
+    
+    clickGenerate();
+    expect(await screen.findByRole("alert")).toHaveTextContent("Please enter a valid YouTube URL.");
+    expect(trackEvent).toHaveBeenCalledWith("invalid_url_attempt", { domain: "example.com" });
   });
 
   it("shows the article returned by the backend on success", async () => {
@@ -429,10 +430,10 @@ describe("Analytics events", () => {
     clickGenerate();
     await screen.findByLabelText("Generated article");
 
-    expect(trackEvent).toHaveBeenCalledWith("generate_submit", { url_valid: true });
+    expect(trackEvent).toHaveBeenCalledWith("generate_submit", { video_id: "dQw4w9WgXcQ" });
     expect(trackEvent).toHaveBeenCalledWith(
       "generate_success",
-      expect.objectContaining({ word_count: 5 }),
+      expect.objectContaining({ video_id: "dQw4w9WgXcQ", word_count: 5 }),
     );
   });
 
