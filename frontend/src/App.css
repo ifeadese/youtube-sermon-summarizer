@@ -394,7 +394,6 @@
 .action-btn.icon-only {
   padding: 0.5rem;
 }
-
 .action-btn:hover {
   background: var(--plum);
   color: #fff;
@@ -407,6 +406,22 @@
   outline-offset: 2px;
 }
 
+
+
+.article-textarea {
+  width: 100%;
+  min-height: 24rem;
+  padding: clamp(1.5rem, 4vw, 2.5rem);
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: clamp(1.04rem, 2.2vw, 1.16rem);
+  line-height: 1.75;
+  color: var(--ink);
+  border: none;
+  resize: vertical;
+  background: transparent;
+  outline: none;
+}
 
 /* The model emits the title on the first line, so give the first *rendered*
    line editorial weight. This is a graceful enhancement only: a very long
