@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Routes, Route, Link, NavLink, useLocation } from "react-router-dom";
-import { Copy, Check, FileEdit, AlertCircle, Menu, X } from "lucide-react";
+import { Copy, Check, AlertCircle, Menu, X } from "lucide-react";
 
 import { generateArticle } from "./api.js";
 import { initAnalytics, trackEvent, trackPageView } from "./analytics.js";
@@ -22,6 +22,31 @@ function isValidYouTubeUrl(urlString) {
   }
 }
 
+function extractYouTubeVideoId(urlString) {
+  try {
+    const parsed = new URL(urlString);
+    const host = parsed.hostname.replace(/^www\./, "");
+    if (host === "youtu.be") {
+      return parsed.pathname.slice(1);
+    }
+    if (parsed.pathname.startsWith("/shorts/")) {
+      return parsed.pathname.split("/")[2];
+    }
+    return parsed.searchParams.get("v");
+  } catch {
+    return null;
+  }
+}
+
+function extractDomain(urlString) {
+  try {
+    const parsed = new URL(urlString);
+    return parsed.hostname.replace(/^www\./, "");
+  } catch {
+    return "unknown";
+  }
+}
+
 // Single source of truth for word count — used by both the displayed reading
 // stats and the generate_success analytics event, so they can't drift.
 function countWords(text) {
@@ -34,7 +59,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
+
   const [isNavOpen, setIsNavOpen] = useState(false);
 
   // In-flight guard. A ref updates synchronously (unlike `loading` state, which
@@ -75,14 +100,26 @@ export default function App() {
     setError("");
     setArticle("");
     setCopied(false);
-    setIsEditing(false);
+    
     const trimmed = url.trim();
-    trackEvent("generate_submit", { url_valid: isValidYouTubeUrl(trimmed) });
+    
+    if (!isValidYouTubeUrl(trimmed)) {
+      trackEvent("invalid_url_attempt", { domain: extractDomain(trimmed) });
+      setError("Please enter a valid YouTube URL.");
+      setLoading(false);
+      inFlight.current = false;
+      return;
+    }
+
+    const videoId = extractYouTubeVideoId(trimmed);
+    trackEvent("generate_submit", { video_id: videoId });
+    
     const startedAt = Date.now();
     try {
       const result = await generateArticle(trimmed);
       setArticle(result);
       trackEvent("generate_success", {
+        video_id: videoId,
         latency_ms: Date.now() - startedAt,
         word_count: countWords(result),
       });
@@ -204,7 +241,7 @@ export default function App() {
                   aria-label="YouTube URL"
                 />
               </div>
-              <button type="submit" className="generate-btn" disabled={loading || !isValidYouTubeUrl(url.trim())}>
+              <button type="submit" className="generate-btn" disabled={loading || !url.trim()}>
                 {loading ? (
                   <>
                     <span className="dots" aria-hidden="true">
@@ -244,39 +281,23 @@ export default function App() {
                     {stats.words.toLocaleString()} words · {stats.minutes} min read
                   </span>
                   <div className="result-actions">
-                    <button
-                      type="button"
-                      className="action-btn"
-                      onClick={() => setIsEditing(!isEditing)}
+                    <button 
+                      type="button" 
+                      className="action-btn icon-only" 
+                      onClick={handleCopy}
+                      aria-label={copied ? "Copied" : "Copy text"}
+                      title={copied ? "Copied!" : "Copy Text"}
                     >
-                      <FileEdit size={16} />
-                      {isEditing ? "Done Editing" : "Edit Text"}
-                    </button>
-                    <button type="button" className="action-btn" onClick={handleCopy}>
                       {copied ? <Check size={16} /> : <Copy size={16} />}
-                      {copied ? "Copied!" : "Copy Text"}
                     </button>
                   </div>
                   <span className="visually-hidden" aria-live="polite">
                     {copied ? "Article copied to clipboard" : ""}
                   </span>
                 </div>
-                {/* Fixed-height, vertically-scrollable so a long article scrolls
-                    inside its box instead of stretching the page. */}
-                <div className="article-scroll">
-                  {isEditing ? (
-                    <textarea
-                      className="article-textarea"
-                      value={article}
-                      onChange={(e) => setArticle(e.target.value)}
-                      aria-label="Edit article"
-                    />
-                  ) : (
-                    <article className="article" aria-label="Generated article">
-                      {article}
-                    </article>
-                  )}
-                </div>
+                <article className="article" aria-label="Generated article">
+                  {article}
+                </article>
               </section>
             )}
 
@@ -293,7 +314,7 @@ export default function App() {
           &copy; 2026 {BRAND}. All rights reserved.
         </span>
         <span className="footer__credit">
-          Made by <a href="https://ifeadese.com" target="_blank" rel="noopener noreferrer">Ife Adese</a>
+          Made by <a href="https://ifeadese.com" target="_blank" rel="noopener noreferrer" onClick={() => trackEvent("outbound_click", { link_url: "https://ifeadese.com" })}>Ife Adese</a>
         </span>
       </footer>
     </div>

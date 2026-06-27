@@ -391,6 +391,9 @@
   transition: background 0.16s ease, color 0.16s ease, transform 0.16s ease, box-shadow 0.16s ease;
 }
 
+.action-btn.icon-only {
+  padding: 0.5rem;
+}
 .action-btn:hover {
   background: var(--plum);
   color: #fff;
@@ -403,37 +406,7 @@
   outline-offset: 2px;
 }
 
-/* Fixed-height, vertically-scrollable container — a long article scrolls inside
-   its box instead of stretching the page. The paper styling (border, gold spine,
-   shadow) lives on the scroll box; the article itself just sets typography. */
-.article-scroll {
-  max-height: clamp(18rem, 48vh, 34rem);
-  overflow-y: auto;
-  background: #fff;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
-  transition: border-color 0.18s ease, box-shadow 0.18s ease;
-}
 
-.article-scroll:focus-within {
-  border-color: var(--gold);
-  box-shadow: 0 0 0 3px rgba(200, 150, 46, 0.22);
-}
-
-.article-scroll--example {
-  max-height: clamp(16rem, 40vh, 28rem);
-}
-
-.article {
-  margin: 0;
-  padding: clamp(1.5rem, 4vw, 2.5rem);
-  white-space: pre-wrap;
-  font-family: var(--font-serif);
-  font-size: clamp(1.04rem, 2.2vw, 1.16rem);
-  line-height: 1.75;
-  color: var(--ink);
-  overflow-wrap: break-word;
-}
 
 .article-textarea {
   width: 100%;
