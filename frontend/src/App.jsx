@@ -22,6 +22,31 @@ function isValidYouTubeUrl(urlString) {
   }
 }
 
+function extractYouTubeVideoId(urlString) {
+  try {
+    const parsed = new URL(urlString);
+    const host = parsed.hostname.replace(/^www\./, "");
+    if (host === "youtu.be") {
+      return parsed.pathname.slice(1);
+    }
+    if (parsed.pathname.startsWith("/shorts/")) {
+      return parsed.pathname.split("/")[2];
+    }
+    return parsed.searchParams.get("v");
+  } catch {
+    return null;
+  }
+}
+
+function extractDomain(urlString) {
+  try {
+    const parsed = new URL(urlString);
+    return parsed.hostname.replace(/^www\./, "");
+  } catch {
+    return "unknown";
+  }
+}
+
 // Single source of truth for word count — used by both the displayed reading
 // stats and the generate_success analytics event, so they can't drift.
 function countWords(text) {
@@ -72,13 +97,26 @@ export default function App() {
     setError("");
     setArticle("");
     setCopied(false);
+    
     const trimmed = url.trim();
-    trackEvent("generate_submit", { url_valid: isValidYouTubeUrl(trimmed) });
+    
+    if (!isValidYouTubeUrl(trimmed)) {
+      trackEvent("invalid_url_attempt", { domain: extractDomain(trimmed) });
+      setError("Please enter a valid YouTube URL.");
+      setLoading(false);
+      inFlight.current = false;
+      return;
+    }
+
+    const videoId = extractYouTubeVideoId(trimmed);
+    trackEvent("generate_submit", { video_id: videoId });
+    
     const startedAt = Date.now();
     try {
       const result = await generateArticle(trimmed);
       setArticle(result);
       trackEvent("generate_success", {
+        video_id: videoId,
         latency_ms: Date.now() - startedAt,
         word_count: countWords(result),
       });
@@ -179,7 +217,7 @@ export default function App() {
                   aria-label="YouTube URL"
                 />
               </div>
-              <button type="submit" className="generate-btn" disabled={loading || !isValidYouTubeUrl(url.trim())}>
+              <button type="submit" className="generate-btn" disabled={loading || !url.trim()}>
                 {loading ? (
                   <>
                     <span className="dots" aria-hidden="true">
