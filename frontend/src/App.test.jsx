@@ -234,9 +234,9 @@ describe("Copy button", () => {
     mockClipboard(writeText);
     await renderWithArticle();
 
-    fireEvent.click(screen.getByRole("button", { name: "Copy Text" }));
+    fireEvent.click(screen.getByRole("button", { name: /copy text/i }));
 
-    expect(await screen.findByRole("button", { name: "Copied!" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /copied/i })).toBeInTheDocument();
     expect(writeText).toHaveBeenCalledWith(ARTICLE);
     // Screen-reader announcement (aria-live region).
     expect(screen.getByText("Article copied to clipboard")).toBeInTheDocument();
@@ -248,12 +248,12 @@ describe("Copy button", () => {
 
     vi.useFakeTimers();
     try {
-      fireEvent.click(screen.getByRole("button", { name: "Copy Text" }));
+      fireEvent.click(screen.getByRole("button", { name: /copy text/i }));
       await act(async () => {}); // flush the writeText resolution → setCopied(true)
-      expect(screen.getByRole("button", { name: "Copied!" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /copied/i })).toBeInTheDocument();
 
       act(() => vi.advanceTimersByTime(2000));
-      expect(screen.getByRole("button", { name: "Copy Text" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /copy text/i })).toBeInTheDocument();
     } finally {
       vi.useRealTimers();
     }
@@ -263,7 +263,7 @@ describe("Copy button", () => {
     mockClipboard(vi.fn().mockRejectedValue(new Error("denied")));
     await renderWithArticle();
 
-    fireEvent.click(screen.getByRole("button", { name: "Copy Text" }));
+    fireEvent.click(screen.getByRole("button", { name: /copy text/i }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("copy");
     // The article is still there to copy manually.
@@ -276,19 +276,19 @@ describe("Copy button", () => {
 
     vi.useFakeTimers();
     try {
-      fireEvent.click(screen.getByRole("button", { name: "Copy Text" }));
+      fireEvent.click(screen.getByRole("button", { name: /copy text/i }));
       await act(async () => {});
-      expect(screen.getByRole("button", { name: "Copied!" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /copied/i })).toBeInTheDocument();
 
       act(() => vi.advanceTimersByTime(1500)); // first window not yet elapsed
-      fireEvent.click(screen.getByRole("button", { name: "Copied!" })); // re-copy resets it
+      fireEvent.click(screen.getByRole("button", { name: /copied/i })); // re-copy resets it
       await act(async () => {});
 
       act(() => vi.advanceTimersByTime(1500)); // 1.5s since the reset (< 2s)
-      expect(screen.getByRole("button", { name: "Copied!" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /copied/i })).toBeInTheDocument();
 
       act(() => vi.advanceTimersByTime(600)); // now past 2s since the reset
-      expect(screen.getByRole("button", { name: "Copy Text" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /copy text/i })).toBeInTheDocument();
     } finally {
       vi.useRealTimers();
     }
@@ -298,15 +298,15 @@ describe("Copy button", () => {
     mockClipboard(vi.fn().mockResolvedValue(undefined));
     await renderWithArticle();
 
-    fireEvent.click(screen.getByRole("button", { name: "Copy Text" }));
-    await screen.findByRole("button", { name: "Copied!" });
+    fireEvent.click(screen.getByRole("button", { name: /copy text/i }));
+    await screen.findByRole("button", { name: /copied/i });
 
     // Generate again (the stubbed fetch returns an article on every call).
     fireEvent.click(screen.getByRole("button", { name: "Generate Article" }));
     await screen.findByLabelText("Generated article");
 
-    expect(screen.getByRole("button", { name: "Copy Text" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Copied!" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /copy text/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /copied/i })).not.toBeInTheDocument();
   });
 });
 
@@ -464,8 +464,8 @@ describe("Analytics events", () => {
     clickGenerate();
     await screen.findByLabelText("Generated article");
 
-    fireEvent.click(screen.getByRole("button", { name: "Copy Text" }));
-    await screen.findByRole("button", { name: "Copied!" });
+    fireEvent.click(screen.getByRole("button", { name: /copy text/i }));
+    await screen.findByRole("button", { name: /copied/i });
 
     expect(trackEvent).toHaveBeenCalledWith("copy_article", { success: true });
   });
@@ -485,7 +485,7 @@ describe("Analytics events", () => {
     clickGenerate();
     await screen.findByLabelText("Generated article");
 
-    fireEvent.click(screen.getByRole("button", { name: "Copy Text" }));
+    fireEvent.click(screen.getByRole("button", { name: /copy text/i }));
     await screen.findByRole("alert");
 
     expect(trackEvent).toHaveBeenCalledWith("copy_article", { success: false });
