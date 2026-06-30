@@ -300,7 +300,7 @@ export default function App() {
                     {copied ? "Article copied to clipboard" : ""}
                   </span>
                 </div>
-                <article className="article" aria-label="Generated article">
+                <article className="article" aria-label="Generated article" tabIndex={0}>
                   {article}
                 </article>
               </section>
