@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Routes, Route, Link, NavLink, useLocation } from "react-router-dom";
-import { Copy, Check, AlertCircle, Menu, X } from "lucide-react";
+import { Copy, Check, AlertCircle } from "lucide-react";
 
 import { generateArticle } from "./api.js";
 import { initAnalytics, trackEvent, trackPageView } from "./analytics.js";
@@ -60,8 +60,7 @@ export default function App() {
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
 
-  const [isNavOpen, setIsNavOpen] = useState(false);
-  const [prevPathname, setPrevPathname] = useState(null);
+
 
   // In-flight guard. A ref updates synchronously (unlike `loading` state, which
   // is stale within the same render), so a rapid second submit — e.g. two Enter
@@ -72,11 +71,6 @@ export default function App() {
   const copyTimer = useRef(null);
 
   const location = useLocation();
-
-  if (location.pathname !== prevPathname) {
-    setPrevPathname(location.pathname);
-    setIsNavOpen(false);
-  }
 
   // Load analytics once (no-op unless VITE_GA_MEASUREMENT_ID is set).
   useEffect(() => {
@@ -168,39 +162,18 @@ export default function App() {
           </span>
           {BRAND}
         </Link>
-        <button
-          className="nav-toggle"
-          onClick={() => setIsNavOpen(!isNavOpen)}
-          aria-label="Toggle menu"
-          aria-expanded={isNavOpen}
-        >
-          {isNavOpen ? <X size={24} /> : <Menu size={24} />}
-        </button>
-        {isNavOpen && (
-          <div
-            className="nav-overlay"
-            onClick={() => setIsNavOpen(false)}
-            aria-hidden="true"
-          />
-        )}
-        <nav className={`nav ${isNavOpen ? "nav--open" : ""}`} aria-label="Primary">
+        <nav className="nav" aria-label="Primary">
           <NavLink
             to="/about"
             className={({ isActive }) => `nav-btn ${isActive ? "nav-btn--active" : ""}`}
-            onClick={() => {
-              trackEvent("nav_click", { target: "about" });
-              setIsNavOpen(false);
-            }}
+            onClick={() => trackEvent("nav_click", { target: "about" })}
           >
             About
           </NavLink>
           <NavLink
             to="/contact"
             className={({ isActive }) => `nav-btn ${isActive ? "nav-btn--active" : ""}`}
-            onClick={() => {
-              trackEvent("nav_click", { target: "contact" });
-              setIsNavOpen(false);
-            }}
+            onClick={() => trackEvent("nav_click", { target: "contact" })}
           >
             Contact
           </NavLink>
