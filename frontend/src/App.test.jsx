@@ -365,6 +365,13 @@ describe("Top nav", () => {
     const contact = within(nav).getByRole("link", { name: "Contact" });
     expect(contact.getAttribute("href")).toBe("/contact");
   });
+
+  it("renders the hamburger menu button for mobile navigation", () => {
+    render(<MemoryRouter><App /></MemoryRouter>);
+    const menuBtn = screen.getByRole("button", { name: "Open menu" });
+    expect(menuBtn).toHaveAttribute("aria-expanded", "false");
+    expect(menuBtn).toHaveAttribute("aria-controls", "primary-nav");
+  });
 });
 
 describe("About page", () => {
