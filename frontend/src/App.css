@@ -4,43 +4,164 @@
   flex-direction: column;
   min-height: 100vh;
   min-height: 100dvh;
+  padding-top: calc(0.5rem + 3.5rem);
 }
 
-/* ── Top bar: text logo + minimal nav ────────────────────────────────────── */
+/* ── Top bar: floating pill nav ──────────────────────────────────────────── */
 .topbar {
-  position: sticky;
-  top: 0;
-  z-index: 10;
+  position: fixed;
+  top: 0.5rem;
+  right: 0;
+  left: 0;
+  z-index: 50;
+  padding-inline: 1rem;
+  transition: transform 0.3s ease-in-out;
+  pointer-events: none;
+}
+
+.topbar__shell {
+  margin-inline: auto;
+  width: 100%;
+  max-width: 48rem;
+  border-radius: 1rem;
+  background: transparent;
+  transition: background-color 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+  pointer-events: auto;
+  overflow: hidden;
+  position: relative;
+}
+
+.topbar__shell--open {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-md);
+}
+
+.topbar__inner {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 1.25rem clamp(1rem, 4vw, 2rem);
-  background: #fff;
-  border-bottom: 1px solid var(--border);
+  padding: 0.5rem 1.25rem;
+}
+
+.topbar__actions {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.nav-menu-btn {
+  position: relative;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 7px;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  border: none;
+  border-radius: 9999px;
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.nav-menu-btn__bar {
+  display: block;
+  height: 2px;
+  border-radius: 9999px;
+  background: var(--plum-deep);
+  transition: transform 0.2s ease, opacity 0.2s ease, width 0.2s ease;
+}
+
+.nav-menu-btn__bar:nth-child(1) {
+  width: 1.25rem;
+}
+
+.nav-menu-btn__bar:nth-child(2) {
+  width: 1rem;
+}
+
+.nav-menu-btn__bar:nth-child(3) {
+  width: 1.375rem;
+}
+
+.nav-menu-btn--open .nav-menu-btn__bar:nth-child(1) {
+  width: 1.375rem;
+  transform: translateY(9px) rotate(45deg);
+}
+
+.nav-menu-btn--open .nav-menu-btn__bar:nth-child(2) {
+  opacity: 0;
+}
+
+.nav-menu-btn--open .nav-menu-btn__bar:nth-child(3) {
+  width: 1.375rem;
+  transform: translateY(-9px) rotate(-45deg);
+}
+
+.nav-menu-btn:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+}
+
+.nav-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  border: none;
+  padding: 0;
+  background: rgba(42, 36, 32, 0.18);
+  cursor: pointer;
 }
 
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 0.45ch;
-  font-family: var(--font-serif);
-  font-weight: 600;
-  font-size: 1.1rem;
-  letter-spacing: -0.01em;
-  color: var(--plum-deep);
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 9999px;
+  color: var(--gold);
   text-decoration: none;
+  flex-shrink: 0;
 }
 
-.brand__mark {
-  color: var(--gold);
-  font-size: 0.95rem;
+.brand__icon {
+  width: 1.35rem;
+  height: 1.35rem;
+}
+
+.brand:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
 }
 
 .nav {
-  display: flex;
+  display: none;
   align-items: center;
   gap: clamp(0.75rem, 3vw, 1.5rem);
+}
+
+.topbar__shell > .nav {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.15rem;
+  padding: 0 1.25rem 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.topbar__shell > .nav--open {
+  display: flex;
+}
+
+.topbar__shell > .nav .nav-btn {
+  padding: 0.65rem 0;
+  text-align: left;
 }
 
 .nav a,
@@ -74,10 +195,9 @@
 .nav-btn--active {
   color: var(--plum-deep);
   font-weight: 600;
-  border-bottom: 2px solid var(--gold);
 }
 
-/* ── Hero: form centered on both axes in the space below the top bar ─────── */
+/* ── Hero ────────────────────────────────────────────────────────────────── */
 .hero {
   flex: 1;
   display: flex;
@@ -1002,8 +1122,9 @@
   .contact-submit,
   .contact-input,
   .contact-home-btn,
-  .nav a,
-  .nav-btn {
+  .nav-menu-btn,
+  .nav-overlay,
+  .topbar__actions .nav-btn {
     transition: none;
   }
 }

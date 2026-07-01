@@ -28,6 +28,10 @@ function clickGenerate() {
   fireEvent.click(screen.getByRole("button", { name: "Generate Article" }));
 }
 
+function openNav() {
+  fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
@@ -347,9 +351,10 @@ describe("Tagline", () => {
 
 
 describe("Top nav", () => {
-  it("renders the text logo and the nav links in the correct order", () => {
+  it("renders the brand icon and the nav links in the correct order", () => {
     render(<MemoryRouter><App /></MemoryRouter>);
     expect(screen.getByRole("link", { name: /Sermon Summarizer home/i })).toBeInTheDocument();
+    openNav();
     const nav = screen.getByRole("navigation", { name: "Primary" });
     const aboutBtn = within(nav).getByRole("link", { name: /About/i });
     const contactLink = within(nav).getByRole("link", { name: /Contact/i });
@@ -361,9 +366,21 @@ describe("Top nav", () => {
 
   it("links Contact to the /contact page", () => {
     render(<MemoryRouter><App /></MemoryRouter>);
+    openNav();
     const nav = screen.getByRole("navigation", { name: "Primary" });
     const contact = within(nav).getByRole("link", { name: "Contact" });
     expect(contact.getAttribute("href")).toBe("/contact");
+  });
+
+  it("renders the hamburger menu button for navigation", () => {
+    render(<MemoryRouter><App /></MemoryRouter>);
+    const menuBtn = screen.getByRole("button", { name: "Open menu" });
+    expect(menuBtn).toHaveAttribute("aria-expanded", "false");
+    expect(menuBtn).toHaveAttribute("aria-controls", "primary-nav");
+    expect(screen.queryByRole("navigation", { name: "Primary" })).not.toBeInTheDocument();
+
+    openNav();
+    expect(screen.getByRole("navigation", { name: "Primary" })).toBeInTheDocument();
   });
 });
 
@@ -374,6 +391,7 @@ describe("About page", () => {
     expect(screen.getByRole("heading", { name: "Sermon Summarizer" })).toBeInTheDocument();
     expect(screen.getByLabelText("YouTube URL")).toBeInTheDocument();
     
+    openNav();
     const aboutBtn = screen.getByRole("link", { name: /About/i });
     fireEvent.click(aboutBtn);
     
@@ -385,6 +403,7 @@ describe("About page", () => {
   it("navigates back to home on clicking logo", () => {
     render(<MemoryRouter><App /></MemoryRouter>);
     
+    openNav();
     fireEvent.click(screen.getByRole("link", { name: /About/i }));
     expect(screen.getByRole("heading", { name: "About Sermon Summarizer" })).toBeInTheDocument();
     
@@ -413,6 +432,7 @@ describe("Analytics events", () => {
 
   it("tracks a page_view on SPA route change", () => {
     render(<MemoryRouter initialEntries={["/"]}><App /></MemoryRouter>);
+    openNav();
     fireEvent.click(screen.getByRole("link", { name: /About/i }));
     expect(trackPageView).toHaveBeenCalledWith("/about");
   });
@@ -494,6 +514,7 @@ describe("Analytics events", () => {
 
   it("tracks nav_click on the nav links", () => {
     render(<MemoryRouter><App /></MemoryRouter>);
+    openNav();
     fireEvent.click(screen.getByRole("link", { name: /About/i }));
     expect(trackEvent).toHaveBeenCalledWith("nav_click", { target: "about" });
   });

@@ -12,6 +12,14 @@ import "./App.css";
 // domain/naming decision (issue #34) lands.
 const BRAND = "Sermon Summarizer";
 
+function BrandIcon() {
+  return (
+    <svg className="brand__icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 2.2 13.55 8.1 19.5 8.1 14.7 11.7 16.3 17.6 12 14.1 7.7 17.6 9.3 11.7 4.5 8.1 10.45 8.1Z" />
+    </svg>
+  );
+}
+
 function isValidYouTubeUrl(urlString) {
   try {
     const parsed = new URL(urlString);
@@ -59,7 +67,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
-
+  const [isNavOpen, setIsNavOpen] = useState(false);
 
   // In-flight guard. A ref updates synchronously (unlike `loading` state, which
   // is stale within the same render), so a rapid second submit — e.g. two Enter
@@ -80,6 +88,10 @@ export default function App() {
   // SPA navigations don't fire a page_view on their own — send one per route.
   useEffect(() => {
     trackPageView(location.pathname);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    setIsNavOpen(false);
   }, [location.pathname]);
 
   // Clear any pending "Copied!" reset timer when the component unmounts.
@@ -148,36 +160,73 @@ export default function App() {
     }
   }
 
+  function closeNav() {
+    setIsNavOpen(false);
+  }
+
+  function handleNavClick(target) {
+    trackEvent("nav_click", { target });
+    closeNav();
+  }
+
   return (
     <div className="page">
       <header className="topbar">
-        <Link
-          className="brand"
-          to="/"
-          aria-label={`${BRAND} home`}
-          onClick={() => trackEvent("nav_click", { target: "home" })}
-        >
-          <span className="brand__mark" aria-hidden="true">
-            ✦
-          </span>
-          {BRAND}
-        </Link>
-        <nav className="nav" aria-label="Primary">
-          <NavLink
-            to="/about"
-            className={({ isActive }) => `nav-btn ${isActive ? "nav-btn--active" : ""}`}
-            onClick={() => trackEvent("nav_click", { target: "about" })}
+        <div className={`topbar__shell ${isNavOpen ? "topbar__shell--open" : ""}`}>
+          <div className="topbar__inner">
+            <Link
+              className="brand"
+              to="/"
+              aria-label={`${BRAND} home`}
+              onClick={() => handleNavClick("home")}
+            >
+              <BrandIcon />
+            </Link>
+            <div className="topbar__actions">
+              <button
+                type="button"
+                className={`nav-menu-btn ${isNavOpen ? "nav-menu-btn--open" : ""}`}
+                onClick={() => setIsNavOpen((open) => !open)}
+                aria-label={isNavOpen ? "Close menu" : "Open menu"}
+                aria-expanded={isNavOpen}
+                aria-controls="primary-nav"
+              >
+                <span className="nav-menu-btn__bar" aria-hidden="true" />
+                <span className="nav-menu-btn__bar" aria-hidden="true" />
+                <span className="nav-menu-btn__bar" aria-hidden="true" />
+              </button>
+            </div>
+          </div>
+          <nav
+            id="primary-nav"
+            className={`nav ${isNavOpen ? "nav--open" : ""}`}
+            aria-label="Primary"
+            hidden={!isNavOpen}
           >
-            About
-          </NavLink>
-          <NavLink
-            to="/contact"
-            className={({ isActive }) => `nav-btn ${isActive ? "nav-btn--active" : ""}`}
-            onClick={() => trackEvent("nav_click", { target: "contact" })}
-          >
-            Contact
-          </NavLink>
-        </nav>
+            <NavLink
+              to="/about"
+              className={({ isActive }) => `nav-btn ${isActive ? "nav-btn--active" : ""}`}
+              onClick={() => handleNavClick("about")}
+            >
+              About
+            </NavLink>
+            <NavLink
+              to="/contact"
+              className={({ isActive }) => `nav-btn ${isActive ? "nav-btn--active" : ""}`}
+              onClick={() => handleNavClick("contact")}
+            >
+              Contact
+            </NavLink>
+          </nav>
+        </div>
+        {isNavOpen && (
+          <button
+            type="button"
+            className="nav-overlay"
+            onClick={closeNav}
+            aria-label="Close menu"
+          />
+        )}
       </header>
 
       <Routes>
@@ -187,99 +236,97 @@ export default function App() {
           <main className="hero" id="top">
           <div className="hero__inner">
             <div className="header">
-              <span className="wordmark">
-                <span className="wordmark__mark" aria-hidden="true">
-                  ✦
-                </span>
-                Sermon → Article
-              </span>
-              <h1>
-                <span>Sermon</span>{" "}
-                <span>Summarizer</span>
-              </h1>
-              <p className="tagline">
-                Paste a captioned YouTube sermon link and get a clean, ready-to-publish article.
-              </p>
-            </div>
-
-            <form className="form" onSubmit={handleSubmit}>
-              <div className="field">
-                <span className="field__icon" aria-hidden="true">
-                  ▶
-                </span>
-                <input
-                  type="url"
-                  className="url-input"
-                  placeholder="https://www.youtube.com/watch?v=…"
-                  value={url}
-                  onChange={(event) => setUrl(event.target.value)}
-                  required
-                  autoComplete="off"
-                  spellCheck="false"
-                  aria-label="YouTube URL"
-                />
-              </div>
-              <button type="submit" className="generate-btn" disabled={loading || !url.trim()}>
-                {loading ? (
-                  <>
-                    <span className="dots" aria-hidden="true">
-                      <i />
-                      <i />
-                      <i />
+                  <span className="wordmark">
+                    <span className="wordmark__mark" aria-hidden="true">
+                      ✦
                     </span>
-                    Generating…
-                  </>
-                ) : (
-                  "Generate Article"
-                )}
-              </button>
-            </form>
-
-            {loading && (
-              <p className="status" role="status">
-                Fetching the transcript and writing the article — this can take up to a minute.
-              </p>
-            )}
-
-            {error && (
-              <div className="error-container">
-                <div className="error" role="alert">
-                  <span className="error__icon" aria-hidden="true">
-                    <AlertCircle size={16} strokeWidth={3} />
+                    Sermon → Article
                   </span>
-                  {error}
+                  <h1>
+                    <span>Sermon</span>{" "}
+                    <span>Summarizer</span>
+                  </h1>
+                  <p className="tagline">
+                    Paste a captioned YouTube sermon link and get a clean, ready-to-publish article.
+                  </p>
                 </div>
-              </div>
-            )}
 
-            {article && (
-              <section className="result">
-                <div className="result-bar">
-                  <span className="result-meta">
-                    {stats.words.toLocaleString()} words · {stats.minutes} min read
-                  </span>
-                  <div className="result-actions">
-                    <button 
-                      type="button" 
-                      className="action-btn icon-only" 
-                      onClick={handleCopy}
-                      aria-label={copied ? "Copied" : "Copy text"}
-                      title={copied ? "Copied!" : "Copy Text"}
-                    >
-                      {copied ? <Check size={16} /> : <Copy size={16} />}
-                    </button>
+                <form className="form" onSubmit={handleSubmit}>
+                  <div className="field">
+                    <span className="field__icon" aria-hidden="true">
+                      ▶
+                    </span>
+                    <input
+                      type="url"
+                      className="url-input"
+                      placeholder="https://www.youtube.com/watch?v=…"
+                      value={url}
+                      onChange={(event) => setUrl(event.target.value)}
+                      required
+                      autoComplete="off"
+                      spellCheck="false"
+                      aria-label="YouTube URL"
+                    />
                   </div>
-                  <span className="visually-hidden" aria-live="polite">
-                    {copied ? "Article copied to clipboard" : ""}
-                  </span>
-                </div>
-                <article className="article" aria-label="Generated article" tabIndex={0}>
-                  {article}
-                </article>
-              </section>
-            )}
+                  <button type="submit" className="generate-btn" disabled={loading || !url.trim()}>
+                    {loading ? (
+                      <>
+                        <span className="dots" aria-hidden="true">
+                          <i />
+                          <i />
+                          <i />
+                        </span>
+                        Generating…
+                      </>
+                    ) : (
+                      "Generate Article"
+                    )}
+                  </button>
+                </form>
 
+                {loading && (
+                  <p className="status" role="status">
+                    Fetching the transcript and writing the article — this can take up to a minute.
+                  </p>
+                )}
 
+                {error && (
+                  <div className="error-container">
+                    <div className="error" role="alert">
+                      <span className="error__icon" aria-hidden="true">
+                        <AlertCircle size={16} strokeWidth={3} />
+                      </span>
+                      {error}
+                    </div>
+                  </div>
+                )}
+
+                {article && (
+                  <section className="result">
+                    <div className="result-bar">
+                      <span className="result-meta">
+                        {stats.words.toLocaleString()} words · {stats.minutes} min read
+                      </span>
+                      <div className="result-actions">
+                        <button 
+                          type="button" 
+                          className="action-btn icon-only" 
+                          onClick={handleCopy}
+                          aria-label={copied ? "Copied" : "Copy text"}
+                          title={copied ? "Copied!" : "Copy Text"}
+                        >
+                          {copied ? <Check size={16} /> : <Copy size={16} />}
+                        </button>
+                      </div>
+                      <span className="visually-hidden" aria-live="polite">
+                        {copied ? "Article copied to clipboard" : ""}
+                      </span>
+                    </div>
+                    <article className="article" aria-label="Generated article" tabIndex={0}>
+                      {article}
+                    </article>
+                  </section>
+                )}
           </div>
           </main>
         } />
