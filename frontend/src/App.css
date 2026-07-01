@@ -4,20 +4,37 @@
   flex-direction: column;
   min-height: 100vh;
   min-height: 100dvh;
+  padding-top: calc(0.5rem + 3.5rem);
 }
 
-/* ── Top bar: text logo + minimal nav ────────────────────────────────────── */
+/* ── Top bar: floating pill nav ──────────────────────────────────────────── */
 .topbar {
-  position: sticky;
-  top: 0;
-  z-index: 10;
+  position: fixed;
+  top: 0.5rem;
+  right: 0;
+  left: 0;
+  z-index: 50;
+  padding-inline: 1rem;
+  transition: transform 0.3s ease-in-out;
+  pointer-events: none;
+}
+
+.topbar__shell {
+  margin-inline: auto;
+  width: 100%;
+  max-width: 48rem;
+  border-radius: 1rem;
+  background: transparent;
+  transition: background-color 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+  pointer-events: auto;
+}
+
+.topbar__inner {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 1.25rem clamp(1rem, 4vw, 2rem);
-  background: #fff;
-  border-bottom: 1px solid var(--border);
+  padding: 0.5rem 1.25rem;
 }
 
 .brand {
@@ -74,7 +91,6 @@
 .nav-btn--active {
   color: var(--plum-deep);
   font-weight: 600;
-  border-bottom: 2px solid var(--gold);
 }
 
 /* ── Hero: form centered on both axes in the space below the top bar ─────── */

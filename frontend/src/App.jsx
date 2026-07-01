@@ -151,33 +151,37 @@ export default function App() {
   return (
     <div className="page">
       <header className="topbar">
-        <Link
-          className="brand"
-          to="/"
-          aria-label={`${BRAND} home`}
-          onClick={() => trackEvent("nav_click", { target: "home" })}
-        >
-          <span className="brand__mark" aria-hidden="true">
-            ✦
-          </span>
-          {BRAND}
-        </Link>
-        <nav className="nav" aria-label="Primary">
-          <NavLink
-            to="/about"
-            className={({ isActive }) => `nav-btn ${isActive ? "nav-btn--active" : ""}`}
-            onClick={() => trackEvent("nav_click", { target: "about" })}
-          >
-            About
-          </NavLink>
-          <NavLink
-            to="/contact"
-            className={({ isActive }) => `nav-btn ${isActive ? "nav-btn--active" : ""}`}
-            onClick={() => trackEvent("nav_click", { target: "contact" })}
-          >
-            Contact
-          </NavLink>
-        </nav>
+        <div className="topbar__shell">
+          <div className="topbar__inner">
+            <Link
+              className="brand"
+              to="/"
+              aria-label={`${BRAND} home`}
+              onClick={() => trackEvent("nav_click", { target: "home" })}
+            >
+              <span className="brand__mark" aria-hidden="true">
+                ✦
+              </span>
+              {BRAND}
+            </Link>
+            <nav className="nav" aria-label="Primary">
+              <NavLink
+                to="/about"
+                className={({ isActive }) => `nav-btn ${isActive ? "nav-btn--active" : ""}`}
+                onClick={() => trackEvent("nav_click", { target: "about" })}
+              >
+                About
+              </NavLink>
+              <NavLink
+                to="/contact"
+                className={({ isActive }) => `nav-btn ${isActive ? "nav-btn--active" : ""}`}
+                onClick={() => trackEvent("nav_click", { target: "contact" })}
+              >
+                Contact
+              </NavLink>
+            </nav>
+          </div>
+        </div>
       </header>
 
       <Routes>
