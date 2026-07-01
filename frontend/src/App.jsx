@@ -12,12 +12,13 @@ import "./App.css";
 // domain/naming decision (issue #34) lands.
 const BRAND = "Sermon Summarizer";
 
-const HERO_PREVIEW = {
-  title: "Walking in Faith Today",
-  time: "9:41 AM",
-  excerpt: "God's compassion comes from His character, not from our actions.",
-  reference: "Romans 5:8",
-};
+function BrandIcon() {
+  return (
+    <svg className="brand__icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 2.2 13.55 8.1 19.5 8.1 14.7 11.7 16.3 17.6 12 14.1 7.7 17.6 9.3 11.7 4.5 8.1 10.45 8.1Z" />
+    </svg>
+  );
+}
 
 function isValidYouTubeUrl(urlString) {
   try {
@@ -179,10 +180,7 @@ export default function App() {
               aria-label={`${BRAND} home`}
               onClick={() => handleNavClick("home")}
             >
-              <span className="brand__mark" aria-hidden="true">
-                ✦
-              </span>
-              {BRAND}
+              <BrandIcon />
             </Link>
             <div className="topbar__actions">
               <button
@@ -199,7 +197,12 @@ export default function App() {
               </button>
             </div>
           </div>
-          <nav id="primary-nav" className={`nav ${isNavOpen ? "nav--open" : ""}`} aria-label="Primary">
+          <nav
+            id="primary-nav"
+            className={`nav ${isNavOpen ? "nav--open" : ""}`}
+            aria-label="Primary"
+            hidden={!isNavOpen}
+          >
             <NavLink
               to="/about"
               className={({ isActive }) => `nav-btn ${isActive ? "nav-btn--active" : ""}`}
@@ -231,10 +234,8 @@ export default function App() {
         <Route path="/contact" element={<Contact />} />
         <Route path="/" element={
           <main className="hero" id="top">
-          <div className="hero__stage">
-            <div className="hero__canvas">
-              <div className="hero__inner">
-                <div className="header">
+          <div className="hero__inner">
+            <div className="header">
                   <span className="wordmark">
                     <span className="wordmark__mark" aria-hidden="true">
                       ✦
@@ -326,21 +327,6 @@ export default function App() {
                     </article>
                   </section>
                 )}
-              </div>
-
-              {!article && !loading && (
-                <div className="hero__overflow">
-                  <div className="hero__preview">
-                    <div className="hero__preview-card" aria-hidden="true">
-                      <p className="hero__preview-title">{HERO_PREVIEW.title}</p>
-                      <p className="hero__preview-time">{HERO_PREVIEW.time}</p>
-                      <p className="hero__preview-body">{HERO_PREVIEW.excerpt}</p>
-                      <p className="hero__preview-ref">{HERO_PREVIEW.reference}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
           </div>
           </main>
         } />

@@ -55,7 +55,7 @@
 .nav-menu-btn {
   position: relative;
   z-index: 50;
-  display: none;
+  display: flex;
   flex-direction: column;
   align-items: flex-end;
   justify-content: center;
@@ -122,29 +122,46 @@
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 0.45ch;
-  font-family: var(--font-serif);
-  font-weight: 600;
-  font-size: 1.1rem;
-  letter-spacing: -0.01em;
-  color: var(--plum-deep);
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 9999px;
+  color: var(--gold);
   text-decoration: none;
+  flex-shrink: 0;
 }
 
-.brand__mark {
-  color: var(--gold);
-  font-size: 0.95rem;
+.brand__icon {
+  width: 1.35rem;
+  height: 1.35rem;
+}
+
+.brand:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
 }
 
 .nav {
-  display: flex;
+  display: none;
   align-items: center;
   gap: clamp(0.75rem, 3vw, 1.5rem);
 }
 
 .topbar__shell > .nav {
-  justify-content: flex-end;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.15rem;
   padding: 0 1.25rem 0.75rem;
+  border-top: 1px solid var(--border);
+}
+
+.topbar__shell > .nav--open {
+  display: flex;
+}
+
+.topbar__shell > .nav .nav-btn {
+  padding: 0.65rem 0;
+  text-align: left;
 }
 
 .nav a,
@@ -180,91 +197,18 @@
   font-weight: 600;
 }
 
-/* ── Hero: centered stage with preview showcase ─────────────────────────── */
+/* ── Hero ────────────────────────────────────────────────────────────────── */
 .hero {
   flex: 1;
-  width: 100%;
-}
-
-.hero__stage {
-  position: relative;
   display: flex;
-  min-height: calc(100vh - 4rem);
-  min-height: calc(100dvh - 4rem);
-  flex-direction: column;
   align-items: center;
-  text-align: center;
-}
-
-.hero__canvas {
-  position: relative;
-  width: 100%;
-  padding-bottom: 2.5rem;
-}
-
-.hero__overflow {
-  position: relative;
-  width: 100%;
-  overflow: hidden;
-}
-
-.hero__preview {
-  position: relative;
-  display: flex;
-  width: 100%;
-  height: 20rem;
-  margin-top: 7rem;
-  align-items: flex-end;
   justify-content: center;
-}
-
-.hero__preview-card {
-  width: min(100% - 2rem, 22rem);
-  padding: 1.35rem 1.5rem 1.5rem;
-  text-align: left;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
-}
-
-.hero__preview-title {
-  margin: 0;
-  font-family: var(--font-serif);
-  font-size: 1.05rem;
-  font-weight: 600;
-  color: var(--plum-deep);
-}
-
-.hero__preview-time {
-  margin: 0.35rem 0 0;
-  font-size: 0.78rem;
-  font-weight: 500;
-  color: var(--ink-faint);
-}
-
-.hero__preview-body {
-  margin: 1rem 0 0;
-  font-size: 0.95rem;
-  line-height: 1.55;
-  color: var(--ink-muted);
-}
-
-.hero__preview-ref {
-  margin: 0.85rem 0 0;
-  font-size: 0.82rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  color: var(--gold-deep);
+  padding: clamp(2rem, 6vw, 4rem) clamp(1rem, 4vw, 2rem);
 }
 
 .hero__inner {
-  position: relative;
-  z-index: 1;
   width: 100%;
   max-width: 42rem;
-  margin-inline: auto;
-  padding: clamp(2rem, 6vw, 4rem) clamp(1rem, 4vw, 2rem) clamp(1rem, 3vw, 2rem);
   animation: rise 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
@@ -789,63 +733,7 @@
 }
 
 /* ── Responsive: stack the form + steps on small screens ─────────────────── */
-@media (max-width: 48rem) {
-  .nav-menu-btn {
-    display: flex;
-  }
-
-  .topbar__shell > .nav {
-    display: none;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 0.15rem;
-    padding-top: 0;
-    border-top: 1px solid var(--border);
-  }
-
-  .topbar__shell > .nav--open {
-    display: flex;
-  }
-
-  .topbar__shell > .nav .nav-btn {
-    padding: 0.65rem 0;
-    text-align: left;
-  }
-
-  .topbar__shell > .nav .nav-btn--active {
-    color: var(--plum-deep);
-  }
-}
-
-@media (min-width: 48.01rem) {
-  .topbar__inner {
-    padding-bottom: 0;
-  }
-
-  .topbar__shell > .nav {
-    position: absolute;
-    top: 0;
-    right: 1.25rem;
-    height: 100%;
-    padding: 0;
-    pointer-events: none;
-  }
-
-  .topbar__shell > .nav .nav-btn {
-    pointer-events: auto;
-  }
-}
-
 @media (max-width: 34rem) {
-  .hero__preview {
-    height: 16rem;
-    margin-top: 4rem;
-  }
-
-  .hero__preview-card {
-    width: min(100% - 1.5rem, 20rem);
-  }
-
   .form {
     flex-direction: column;
     padding: 0.5rem;
