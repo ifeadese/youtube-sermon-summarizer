@@ -11,7 +11,11 @@
 
 // Bump on any breaking change to event names/params so historical data and
 // future A/A baselines stay comparable. See issue #45 (event governance).
-const SCHEMA_VERSION = 1;
+// v2: generation runs in the browser on the user's own Gemini key —
+// generate_* events gain `provider` + `model`; new connect_open /
+// connect_success / connect_error / key_forgotten / generate_cancel events.
+// Never put the key (or any part of it) in an event.
+const SCHEMA_VERSION = 2;
 
 let initialized = false;
 

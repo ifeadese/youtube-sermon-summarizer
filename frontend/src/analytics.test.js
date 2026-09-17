@@ -47,7 +47,7 @@ describe("analytics adapter", () => {
     trackEvent("generate_success", { latency_ms: 1200, word_count: 600 });
 
     expect(gtag).toHaveBeenCalledWith("event", "generate_success", {
-      schema_version: 1,
+      schema_version: 2,
       latency_ms: 1200,
       word_count: 600,
     });
@@ -61,7 +61,7 @@ describe("analytics adapter", () => {
     trackPageView("/about");
 
     expect(gtag).toHaveBeenCalledWith("event", "page_view", {
-      schema_version: 1,
+      schema_version: 2,
       page_path: "/about",
     });
   });

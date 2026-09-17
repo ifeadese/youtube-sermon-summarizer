@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Routes, Route, Link, NavLink, useLocation } from "react-router-dom";
-import { Copy, Check, AlertCircle } from "lucide-react";
+import { Copy, Check, AlertCircle, Lock } from "lucide-react";
 
-import { generateArticle } from "./api.js";
+import { generateReflection, MODEL } from "./lib/gemini.js";
+import { clearKey, getKey, setKey } from "./lib/keyStore.js";
 import { initAnalytics, trackEvent, trackPageView } from "./analytics.js";
+import ConnectGeminiModal from "./ConnectGeminiModal.jsx";
+import ProviderChip from "./ProviderChip.jsx";
 import About from "./About.jsx";
 import Contact from "./Contact.jsx";
 import "./App.css";
 
-// Working brand name for the text logo. Swap to the final product name once the
-// domain/naming decision (issue #34) lands.
 const BRAND = "Sermon Summarizer";
+const PROVIDER = "gemini";
 
 function isValidYouTubeUrl(urlString) {
   try {
@@ -47,11 +49,11 @@ function extractDomain(urlString) {
   }
 }
 
-// Single source of truth for word count — used by both the displayed reading
-// stats and the generate_success analytics event, so they can't drift.
 function countWords(text) {
   return text.trim() ? text.trim().split(/\s+/).length : 0;
 }
+
+const CLOSED_MODAL = { open: false, mode: "connect", error: "" };
 
 export default function App() {
   const [url, setUrl] = useState("");
@@ -59,79 +61,141 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [copied, setCopied] = useState(false);
+  const [hasKey, setHasKey] = useState(() => Boolean(getKey()));
+  const [modal, setModal] = useState(CLOSED_MODAL);
 
-
-  // In-flight guard. A ref updates synchronously (unlike `loading` state, which
-  // is stale within the same render), so a rapid second submit — e.g. two Enter
-  // presses before the disabled button re-renders — can't fire a duplicate,
-  // billed /summarize call.
   const inFlight = useRef(false);
-  // Tracks the "Copied!" reset timer so we can clear it on a re-copy or unmount.
   const copyTimer = useRef(null);
+  const abortRef = useRef(null);
+  // A URL submitted before a key existed; generated as soon as the key connects.
+  const pendingUrl = useRef("");
 
   const location = useLocation();
 
-
-  // Load analytics once (no-op unless VITE_GA_MEASUREMENT_ID is set).
   useEffect(() => {
     initAnalytics();
   }, []);
 
-  // SPA navigations don't fire a page_view on their own — send one per route.
   useEffect(() => {
     trackPageView(location.pathname);
   }, [location.pathname]);
 
-  // Clear any pending "Copied!" reset timer when the component unmounts.
-  useEffect(() => () => clearTimeout(copyTimer.current), []);
+  useEffect(
+    () => () => {
+      clearTimeout(copyTimer.current);
+      abortRef.current?.abort();
+    },
+    [],
+  );
 
-  // Cheap reading stats for the result header (the prompt targets ~550–750 words).
   const stats = useMemo(() => {
     const words = countWords(article);
     return { words, minutes: Math.max(1, Math.round(words / 200)) };
   }, [article]);
 
-  async function handleSubmit(event) {
+  function openModal(mode, initialError = "") {
+    setModal({ open: true, mode, error: initialError });
+  }
+
+  function closeModal() {
+    pendingUrl.current = "";
+    setModal(CLOSED_MODAL);
+  }
+
+  function handleSubmit(event) {
     event.preventDefault();
+    if (inFlight.current) return;
+
+    const trimmed = url.trim();
+    if (!isValidYouTubeUrl(trimmed)) {
+      trackEvent("invalid_url_attempt", { domain: extractDomain(trimmed) });
+      setError("Please enter a valid YouTube URL.");
+      return;
+    }
+
+    const key = getKey();
+    if (!key) {
+      pendingUrl.current = trimmed;
+      setError("");
+      openModal("connect");
+      return;
+    }
+    runGeneration(trimmed, key);
+  }
+
+  async function runGeneration(targetUrl, key) {
     if (inFlight.current) return;
     inFlight.current = true;
     setLoading(true);
     setError("");
     setArticle("");
     setCopied(false);
-    
-    const trimmed = url.trim();
-    
-    if (!isValidYouTubeUrl(trimmed)) {
-      trackEvent("invalid_url_attempt", { domain: extractDomain(trimmed) });
-      setError("Please enter a valid YouTube URL.");
-      setLoading(false);
-      inFlight.current = false;
-      return;
-    }
 
-    const videoId = extractYouTubeVideoId(trimmed);
-    trackEvent("generate_submit", { video_id: videoId });
-    
+    const meta = { video_id: extractYouTubeVideoId(targetUrl), provider: PROVIDER, model: MODEL };
+    trackEvent("generate_submit", meta);
+
+    const controller = new AbortController();
+    abortRef.current = controller;
     const startedAt = Date.now();
+    let firstTextAt = 0;
+
     try {
-      const result = await generateArticle(trimmed);
+      const result = await generateReflection({
+        url: targetUrl,
+        key,
+        signal: controller.signal,
+        onDelta: (chunk) => {
+          if (!firstTextAt) firstTextAt = Date.now();
+          setArticle((current) => current + chunk);
+        },
+      });
       setArticle(result);
       trackEvent("generate_success", {
-        video_id: videoId,
+        ...meta,
         latency_ms: Date.now() - startedAt,
+        first_text_ms: firstTextAt ? firstTextAt - startedAt : 0,
         word_count: countWords(result),
       });
     } catch (err) {
-      setError(err.message);
-      trackEvent("generate_error", {
-        error_type: err?.type || "unknown",
-        status: err?.status || 0,
-      });
+      setArticle("");
+      if (err?.type === "cancelled") {
+        trackEvent("generate_cancel", { ...meta, latency_ms: Date.now() - startedAt });
+      } else if (err?.type === "invalid_key") {
+        // The stored key stopped working (revoked, or pasted wrong): forget it
+        // and ask again, keeping the URL so the retry is one click.
+        clearKey();
+        setHasKey(false);
+        pendingUrl.current = targetUrl;
+        openModal("connect", err.message);
+        trackEvent("generate_error", { ...meta, error_type: "invalid_key", status: err?.status || 0 });
+      } else {
+        setError(err?.message || "Something went wrong. Please try again.");
+        trackEvent("generate_error", { ...meta, error_type: err?.type || "unknown", status: err?.status || 0 });
+      }
     } finally {
+      abortRef.current = null;
       setLoading(false);
       inFlight.current = false;
     }
+  }
+
+  function handleCancel() {
+    abortRef.current?.abort();
+  }
+
+  function handleConnected(key, { remember }) {
+    setKey(key, { remember });
+    setHasKey(true);
+    const next = pendingUrl.current;
+    pendingUrl.current = "";
+    setModal(CLOSED_MODAL);
+    if (next) runGeneration(next, key);
+  }
+
+  function handleForget() {
+    clearKey();
+    setHasKey(false);
+    closeModal();
   }
 
   async function handleCopy() {
@@ -162,22 +226,25 @@ export default function App() {
           </span>
           {BRAND}
         </Link>
-        <nav className="nav" aria-label="Primary">
-          <NavLink
-            to="/about"
-            className={({ isActive }) => `nav-btn ${isActive ? "nav-btn--active" : ""}`}
-            onClick={() => trackEvent("nav_click", { target: "about" })}
-          >
-            About
-          </NavLink>
-          <NavLink
-            to="/contact"
-            className={({ isActive }) => `nav-btn ${isActive ? "nav-btn--active" : ""}`}
-            onClick={() => trackEvent("nav_click", { target: "contact" })}
-          >
-            Contact
-          </NavLink>
-        </nav>
+        <div className="topbar__right">
+          <ProviderChip connected={hasKey} onClick={() => openModal(hasKey ? "manage" : "connect")} />
+          <nav className="nav" aria-label="Primary">
+            <NavLink
+              to="/about"
+              className={({ isActive }) => `nav-btn ${isActive ? "nav-btn--active" : ""}`}
+              onClick={() => trackEvent("nav_click", { target: "about" })}
+            >
+              About
+            </NavLink>
+            <NavLink
+              to="/contact"
+              className={({ isActive }) => `nav-btn ${isActive ? "nav-btn--active" : ""}`}
+              onClick={() => trackEvent("nav_click", { target: "contact" })}
+            >
+              Contact
+            </NavLink>
+          </nav>
+        </div>
       </header>
 
       <Routes>
@@ -198,7 +265,7 @@ export default function App() {
                 <span>Summarizer</span>
               </h1>
               <p className="tagline">
-                Paste a captioned YouTube sermon link and get a clean, ready-to-publish article.
+                Paste a YouTube sermon link and get a clean, ready-to-publish article.
               </p>
             </div>
 
@@ -233,11 +300,21 @@ export default function App() {
                   "Generate Article"
                 )}
               </button>
+              {loading && (
+                <button type="button" className="cancel-btn" onClick={handleCancel}>
+                  Cancel
+                </button>
+              )}
             </form>
+
+            <p className="trust">
+              <Lock size={13} aria-hidden="true" />
+              Runs on your own free Gemini key. Your key and the video never touch our servers.
+            </p>
 
             {loading && (
               <p className="status" role="status">
-                Fetching the transcript and writing the article — this can take up to a minute.
+                Gemini is watching the sermon and writing the reflection — usually a minute or two.
               </p>
             )}
 
@@ -259,9 +336,9 @@ export default function App() {
                     {stats.words.toLocaleString()} words · {stats.minutes} min read
                   </span>
                   <div className="result-actions">
-                    <button 
-                      type="button" 
-                      className="action-btn icon-only" 
+                    <button
+                      type="button"
+                      className="action-btn icon-only"
                       onClick={handleCopy}
                       aria-label={copied ? "Copied" : "Copy text"}
                       title={copied ? "Copied!" : "Copy Text"}
@@ -295,6 +372,15 @@ export default function App() {
           Made by <a href="https://ifeadese.com" target="_blank" rel="noopener noreferrer" onClick={() => trackEvent("outbound_click", { link_url: "https://ifeadese.com" })}>Ife Adese</a>
         </span>
       </footer>
+
+      <ConnectGeminiModal
+        open={modal.open}
+        mode={modal.mode}
+        initialError={modal.error}
+        onConnected={handleConnected}
+        onForget={handleForget}
+        onClose={closeModal}
+      />
     </div>
   );
 }
