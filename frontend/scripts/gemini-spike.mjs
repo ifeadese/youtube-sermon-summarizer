@@ -16,7 +16,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
-import { generateReflection, validateKey, readSse, buildRequestBody, API_BASE } from "../src/lib/gemini.js";
+import { generateReflection, validateKey, readSse, buildRequestBody, API_BASE, API_VERSION } from "../src/lib/gemini.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
@@ -47,7 +47,7 @@ function reportError(err, key) {
   console.log(`ERROR type=${err.type ?? "?"} status=${err.status ?? "-"}`);
   console.log(`message: ${err.message}`);
   if (err.body) console.log(`body: ${redact(err.body, key)}`);
-  if (err.cause && !err.body) console.log(`cause: ${err.cause?.message ?? err.cause}`);
+  if (err.cause && !err.body) console.log(`cause: ${redact(String(err.cause?.message ?? err.cause), key)}`);
 }
 
 const args = process.argv.slice(2);
@@ -80,7 +80,7 @@ const t0 = Date.now();
 
 if (raw) {
   // Print every event name as it arrives, to check the wire format.
-  const response = await fetch(`${API_BASE}/v1beta/interactions?alt=sse`, {
+  const response = await fetch(`${API_BASE}/${API_VERSION}/interactions?alt=sse`, {
     method: "POST",
     headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
     body: JSON.stringify(buildRequestBody(url)),
@@ -113,7 +113,11 @@ try {
       deltas += 1;
       if (!firstDeltaAt) firstDeltaAt = Date.now();
     },
-    onUsage: (usage) => console.log(`  usage: ${redact(usage, realKey)}`),
+    onUsage: (usage) => {
+      const video = usage?.input_tokens_by_modality?.find((m) => m.modality === "video")?.tokens ?? 0;
+      console.log(`  usage: video=${video} input=${usage?.total_input_tokens} output=${usage?.total_output_tokens} thought=${usage?.total_thought_tokens}`);
+    },
+    onRetry: (err) => console.log(`  retrying once after: type=${err.type} status=${err.status ?? "-"}`),
   });
   const words = text.trim().split(/\s+/).length;
   console.log(`  ok: ${deltas} deltas, ${text.length} chars, ${words} words`);
