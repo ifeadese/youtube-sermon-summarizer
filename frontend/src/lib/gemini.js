@@ -87,8 +87,8 @@ const USER_MESSAGES = {
  * can show a friendly message and report a useful error_type to analytics.
  * `body` is the parsed Google error payload when there was one (never the key).
  */
-export function geminiError(type, { cause, status, body, message } = {}) {
-  const text = message || USER_MESSAGES[type] || USER_MESSAGES.bad_response;
+export function geminiError(type, { cause, status, body } = {}) {
+  const text = USER_MESSAGES[type] || USER_MESSAGES.bad_response;
   const error = cause ? new Error(text, { cause }) : new Error(text);
   error.type = type;
   if (status) error.status = status;
@@ -217,26 +217,12 @@ export function classify(status, body) {
  * the API-key layer answers in plain JSON — so try both.
  */
 export function parseErrorBody(text) {
-  if (!text) return null;
+  const payload = /^data: ?(.*)$/m.exec(text ?? "")?.[1] ?? text;
   try {
-    return JSON.parse(text);
+    return JSON.parse(payload);
   } catch {
-    // fall through to SSE framing
+    return null;
   }
-  for (const block of text.split(/\r?\n\r?\n/)) {
-    const data = block
-      .split(/\r?\n/)
-      .filter((line) => line.startsWith("data:"))
-      .map((line) => line.slice(5).replace(/^ /, ""))
-      .join("\n");
-    if (!data) continue;
-    try {
-      return JSON.parse(data);
-    } catch {
-      // try the next block
-    }
-  }
-  return null;
 }
 
 async function errorFromResponse(response) {
@@ -253,41 +239,57 @@ function isAbort(err) {
   return err?.name === "AbortError";
 }
 
+/**
+ * An AbortController that fires on the caller's signal or after `ms`, whichever
+ * comes first. `reason()` says which; `dispose()` clears everything and aborts,
+ * which releases the connection (harmless once a response is fully consumed).
+ */
+function deadline(signal, ms) {
+  if (signal?.aborted) throw geminiError("cancelled");
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  const timer = setTimeout(abort, ms);
+  signal?.addEventListener("abort", abort, { once: true });
+  return {
+    controller,
+    reason: () => (signal?.aborted ? "cancelled" : "timeout"),
+    dispose() {
+      clearTimeout(timer);
+      signal?.removeEventListener("abort", abort);
+      controller.abort();
+    },
+  };
+}
+
+/** GET the model resource: a zero-token call that checks the key and the model together. */
+function fetchModel(key, signal) {
+  return fetch(`${API_BASE}/${API_VERSION}/models/${MODEL}`, { method: "GET", headers: { "x-goog-api-key": key }, signal });
+}
+
 // ── validateKey ─────────────────────────────────────────────────────────────
 
 /**
- * Check that a key is accepted by the API without spending any tokens or daily
- * requests: list models (one page). Resolves `true`, or throws a typed error.
- * Has its own timeout — the dialog that calls this cannot be closed mid-test.
+ * Check that a key is accepted — and that the model this site uses still
+ * exists — without spending any tokens or daily requests. Resolves `true`, or
+ * throws a typed error. Has its own timeout: the dialog that calls this cannot
+ * be closed mid-test.
  */
 export async function validateKey(key, { signal } = {}) {
   const value = normalizeKey(key);
-  if (signal?.aborted) throw geminiError("cancelled");
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), VALIDATE_TIMEOUT_MS);
-  const onCallerAbort = () => controller.abort();
-  if (signal) {
-    if (signal.aborted) onCallerAbort();
-    else signal.addEventListener("abort", onCallerAbort, { once: true });
-  }
+  const limit = deadline(signal, VALIDATE_TIMEOUT_MS);
   try {
     let response;
     try {
-      response = await fetch(`${API_BASE}/${API_VERSION}/models?pageSize=1`, {
-        method: "GET",
-        headers: { "x-goog-api-key": value },
-        signal: controller.signal,
-      });
+      response = await fetchModel(value, limit.controller.signal);
     } catch (err) {
-      if (isAbort(err)) throw geminiError(signal?.aborted ? "cancelled" : "timeout", { cause: err });
-      throw geminiError("network", { cause: err });
+      throw geminiError(isAbort(err) ? limit.reason() : "network", { cause: err });
     }
+    // WIRE: a missing model is 404 NOT_FOUND here; the key is checked first, so a bad key never gets this far.
+    if (response.status === 404) throw geminiError("model_unavailable", { status: 404 });
     if (!response.ok) throw await errorFromResponse(response);
     return true;
   } finally {
-    clearTimeout(timer);
-    signal?.removeEventListener("abort", onCallerAbort);
-    controller.abort(); // release the connection; harmless once the response is consumed
+    limit.dispose();
   }
 }
 
@@ -354,16 +356,9 @@ function acceptResult(text, terminal) {
 
 /** One attempt. `state.delivered` flips true once any text reached the caller. */
 async function attempt({ uri, key, signal, onDelta, onUsage }, state) {
-  if (signal?.aborted) throw geminiError("cancelled");
-  const controller = new AbortController();
+  const limit = deadline(signal, REQUEST_TIMEOUT_MS);
+  const { controller } = limit;
   let idleTimer = null;
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  const onCallerAbort = () => controller.abort();
-  if (signal) {
-    if (signal.aborted) onCallerAbort();
-    else signal.addEventListener("abort", onCallerAbort, { once: true });
-  }
-  const abortType = () => (signal?.aborted ? "cancelled" : "timeout");
   const armIdle = () => {
     clearTimeout(idleTimer);
     idleTimer = setTimeout(() => controller.abort(), IDLE_TIMEOUT_MS);
@@ -380,8 +375,7 @@ async function attempt({ uri, key, signal, onDelta, onUsage }, state) {
         signal: controller.signal,
       });
     } catch (err) {
-      if (isAbort(err)) throw geminiError(abortType(), { cause: err });
-      throw geminiError("network", { cause: err });
+      throw geminiError(isAbort(err) ? limit.reason() : "network", { cause: err });
     }
 
     if (!response.ok) throw await errorFromResponse(response);
@@ -417,25 +411,40 @@ async function attempt({ uri, key, signal, onDelta, onUsage }, state) {
       // A bug in the caller's own onDelta is not Gemini's fault: pass it through.
       if (consumerError && err === consumerError) throw err;
       if (err?.type) throw err;
-      if (isAbort(err)) throw geminiError(abortType(), { cause: err });
-      throw geminiError("bad_response", { cause: err });
+      throw geminiError(isAbort(err) ? limit.reason() : "bad_response", { cause: err });
     }
 
     const result = acceptResult(text, terminal);
     if (terminal?.usage && onUsage) onUsage(terminal.usage);
     return result;
   } finally {
-    clearTimeout(timer);
     clearTimeout(idleTimer);
-    signal?.removeEventListener("abort", onCallerAbort);
     // Always close the connection: after a thrown in-stream error or a consumer
     // exception the request would otherwise keep running against the user's
-    // quota until the server gave up. Harmless after a clean finish.
-    controller.abort();
+    // quota until the server gave up.
+    limit.dispose();
   }
 }
 
 const RETRYABLE = new Set(["network", "server"]);
+
+/**
+ * WIRE: a retired or unknown model answers the generate call with HTTP 404 and
+ * code `not_found` — the same code as "that URL isn't a video" (the documented
+ * `model_not_found` is not what arrives). Links are canonicalized before they
+ * are sent, so ask the one question that tells the two apart.
+ */
+async function modelIsMissing(key, signal) {
+  let limit;
+  try {
+    limit = deadline(signal, VALIDATE_TIMEOUT_MS);
+    return (await fetchModel(key, limit.controller.signal)).status === 404;
+  } catch {
+    return false; // can't tell — keep the original error
+  } finally {
+    limit?.dispose();
+  }
+}
 
 function sleep(ms, signal) {
   return new Promise((resolve, reject) => {
@@ -466,10 +475,9 @@ function sleep(ms, signal) {
  * @param {(usage: object) => void} [args.onUsage]  Called with the final usage block.
  * @param {(error: Error) => void} [args.onRetry]   Called before the single automatic retry.
  * @param {number} [args.retries=1]       Automatic retries for transient failures before any text.
- * @param {number} [args.retryDelayMs]    Override the 2–4 s jittered backoff (tests).
  * @returns {Promise<string>} The full reflection text, trimmed.
  */
-export async function generateReflection({ url, key, signal, onDelta, onUsage, onRetry, retries = 1, retryDelayMs }) {
+export async function generateReflection({ url, key, signal, onDelta, onUsage, onRetry, retries = 1 }) {
   const uri = canonicalizeYouTubeUrl(url);
   if (!uri) throw geminiError("unsupported_video");
   const value = normalizeKey(key);
@@ -479,11 +487,14 @@ export async function generateReflection({ url, key, signal, onDelta, onUsage, o
     try {
       return await attempt({ uri, key: value, signal, onDelta, onUsage }, state);
     } catch (err) {
+      if (err?.body?.error?.code === "not_found" && (await modelIsMissing(value, signal))) {
+        throw geminiError("model_unavailable", { status: err.status, body: err.body });
+      }
       const canRetry = tries < retries && RETRYABLE.has(err?.type) && !state.delivered && !signal?.aborted;
       if (!canRetry) throw err;
       onRetry?.(err);
       const [min, max] = RETRY_DELAY_RANGE_MS;
-      await sleep(retryDelayMs ?? min + Math.random() * (max - min), signal);
+      await sleep(min + Math.random() * (max - min), signal);
     }
   }
 }

@@ -67,6 +67,11 @@ const overloadWire = {
 };
 const missingVideoWire = { error: { message: "The caller does not have permission", code: "permission_denied" }, event_type: "error" };
 const notYouTubeWire = { error: { message: "Requested entity was not found.", code: "not_found" }, event_type: "error" };
+// WIRE: a nonexistent model on the generate path — HTTP 404, plain JSON body, the same `not_found` code.
+const modelGoneWire = { error: { message: "Model 'gemini-0.0-retired-model' not found. Did you mean 'gemini-2.0-flash-lite'?", code: "not_found" } };
+// WIRE: GET /models/<id> for a nonexistent model.
+const modelGetMissing = () => json({ error: { code: 404, message: "Model is not found: models/x for api version v1beta", status: "NOT_FOUND" } }, 404);
+const modelGetOk = () => json({ name: `models/${MODEL}`, displayName: "Gemini 3.8 Flash" }, 200);
 
 // WIRE: the API-key layer answers in Google's standard JSON envelope.
 const envelope = (code, status, message, reason) => ({
@@ -493,6 +498,22 @@ describe("generateReflection — errors", () => {
     await expect(run()).rejects.toMatchObject({ type });
   });
 
+  it("tells a retired model apart from a bad link: not_found + model GET 404 → model_unavailable (WIRE)", async () => {
+    fetchMock.mockResolvedValueOnce(json(modelGoneWire, 404)).mockResolvedValueOnce(modelGetMissing());
+    const err = await run().catch((e) => e);
+    expect(err.type).toBe("model_unavailable");
+    expect(err.message).not.toMatch(/YouTube video link/);
+    expect(fetchMock.mock.calls[1][0]).toBe(`${API_BASE}/${API_VERSION}/models/${MODEL}`);
+    expect(fetchMock.mock.calls[1][1].headers["x-goog-api-key"]).toBe(KEY);
+  });
+
+  it("keeps unsupported_video when the model exists, or when the model check itself fails", async () => {
+    fetchMock.mockResolvedValueOnce(sse([frame("error", notYouTubeWire)])).mockResolvedValueOnce(modelGetOk());
+    await expect(run()).rejects.toMatchObject({ type: "unsupported_video" });
+    fetchMock.mockResolvedValueOnce(sse([frame("error", notYouTubeWire)])).mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    await expect(run()).rejects.toMatchObject({ type: "unsupported_video" });
+  });
+
   it("maps a plain-text 5xx to server and a fetch failure to network", async () => {
     fetchMock.mockResolvedValueOnce(new Response("upstream down", { status: 503 }));
     await expect(run()).rejects.toMatchObject({ type: "server", status: 503 });
@@ -610,7 +631,18 @@ describe("generateReflection — timeouts", () => {
 });
 
 describe("generateReflection — retry", () => {
-  const retrying = (extra = {}) => generateReflection({ url: CANONICAL, key: KEY, retryDelayMs: 0, ...extra });
+  // Default retry policy, with the 2–4 s jittered backoff skipped by fake timers.
+  const retrying = async (extra = {}) => {
+    vi.useFakeTimers();
+    const settled = generateReflection({ url: CANONICAL, key: KEY, ...extra }).then(
+      (value) => ({ value }),
+      (error) => ({ error }),
+    );
+    await vi.advanceTimersByTimeAsync(4000);
+    const outcome = await settled;
+    if (outcome.error) throw outcome.error;
+    return outcome.value;
+  };
 
   it("retries once after a network failure before any response", async () => {
     fetchMock.mockRejectedValueOnce(new TypeError("Failed to fetch")).mockResolvedValueOnce(ok());
@@ -652,18 +684,18 @@ describe("generateReflection — retry", () => {
   it("a cancel during the backoff rejects as cancelled and does not retry", async () => {
     const caller = new AbortController();
     fetchMock.mockRejectedValue(new TypeError("Failed to fetch"));
-    const promise = generateReflection({ url: CANONICAL, key: KEY, signal: caller.signal, retryDelayMs: 60_000, onRetry: () => caller.abort() });
+    const promise = generateReflection({ url: CANONICAL, key: KEY, signal: caller.signal, onRetry: () => caller.abort() });
     await expect(promise).rejects.toMatchObject({ type: "cancelled" });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 
 describe("validateKey", () => {
-  it("lists one model with the key in a header and resolves true", async () => {
-    fetchMock.mockResolvedValue(json({ models: [{ name: "models/x" }] }, 200));
+  it("GETs the model this site uses, with the key in a header, and resolves true", async () => {
+    fetchMock.mockResolvedValue(modelGetOk());
     await expect(validateKey(`  ${KEY} `)).resolves.toBe(true);
     const [calledUrl, init] = fetchMock.mock.calls[0];
-    expect(calledUrl).toBe(`${API_BASE}/${API_VERSION}/models?pageSize=1`);
+    expect(calledUrl).toBe(`${API_BASE}/${API_VERSION}/models/${MODEL}`);
     expect(calledUrl).not.toContain(KEY);
     expect(init.headers["x-goog-api-key"]).toBe(KEY);
     expect(init.signal).toBeInstanceOf(AbortSignal);
@@ -676,6 +708,11 @@ describe("validateKey", () => {
     await expect(validateKey(KEY)).rejects.toMatchObject({ type: "invalid_key", status: 403 });
     fetchMock.mockResolvedValueOnce(json(envelope(403, "PERMISSION_DENIED", "blocked", "API_KEY_HTTP_REFERRER_BLOCKED"), 403));
     await expect(validateKey(KEY)).rejects.toMatchObject({ type: "key_restricted" });
+  });
+
+  it("reports a retired model at connect time instead of accepting the key (WIRE: 404 NOT_FOUND)", async () => {
+    fetchMock.mockResolvedValue(modelGetMissing());
+    await expect(validateKey(KEY)).rejects.toMatchObject({ type: "model_unavailable", status: 404 });
   });
 
   it("rejects a malformed key locally as invalid_key, not as a network error", async () => {
