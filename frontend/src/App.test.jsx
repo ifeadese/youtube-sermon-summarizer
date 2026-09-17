@@ -225,6 +225,36 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Generate Article" })).toBeEnabled();
   });
 
+  it.each([
+    ["too_short", "Gemini returned something too short to be a reflection. Please try again."],
+    ["no_sermon", "Gemini didn't find a sermon or teaching in that video. Try the link to the message itself."],
+    ["video_not_read", "Gemini couldn't read the video itself, so nothing reliable could be written."],
+    ["truncated", "Gemini ran out of room before finishing the reflection. Please try again."],
+  ])("discards text that already streamed when the client rejects late with %s", async (type, message) => {
+    // These checks run after the stream ends, so the reader has already seen the text.
+    connectKey();
+    let sendDelta;
+    let fail;
+    generateReflection.mockImplementation(({ onDelta }) => new Promise((_, reject) => {
+      sendDelta = onDelta;
+      fail = reject;
+    }));
+    renderApp();
+    typeUrl();
+    clickGenerate();
+
+    await screen.findByRole("status");
+    act(() => sendDelta("A confident-looking paragraph that is not a reflection of the sermon."));
+    expect(await screen.findByLabelText("Generated article")).toHaveTextContent("confident-looking");
+
+    await act(async () => fail(Object.assign(new Error(message), { type })));
+
+    expect(screen.queryByLabelText("Generated article")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /copy text/i })).not.toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent(message);
+    expect(trackEvent).toHaveBeenCalledWith("generate_error", expect.objectContaining({ error_type: type }));
+  });
+
   it("Cancel aborts the request, discards partial text, and shows no error", async () => {
     connectKey();
     generateReflection.mockImplementation(({ signal, onDelta }) => new Promise((_, reject) => {
