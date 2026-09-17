@@ -1,8 +1,45 @@
 # Prompt Log
 
-A running record of changes to `backend/prompts.py` (`SYSTEM_PROMPT`) and why.
+A running record of changes to the `SYSTEM_PROMPT` (now `frontend/src/prompt.js`;
+`backend/prompts.py` through v1.1) and why.
 The prompt is the core product — this log keeps its evolution auditable so we
 can tell *what* changed, *why*, and whether a change helped.
+
+---
+
+## v2.0 — Video input via Gemini (2026-09-16)
+
+**Change:** The prompt moved from `backend/prompts.py` to `frontend/src/prompt.js`
+and now addresses a model that *watches the YouTube video* (Gemini Interactions
+API, video part at low media resolution) instead of one reading an
+auto-generated transcript.
+
+**Why:** Bring-your-own-key redesign. Each user runs the app on their own free
+Gemini key from the browser, so there is no backend and no transcript step.
+Gemini accepts a public YouTube URL directly.
+
+**What changed (v1.1 → v2.0):**
+
+| Dimension | v1.1 | v2.0 |
+|-----------|------|------|
+| Source framing | "raw transcript of a spoken sermon … automatically generated and messy … transcription errors" | "the video of a church service"; work from the preacher's own spoken words |
+| Noise to ignore | worship lyrics, music cues, call-and-response, repeats, false starts, transcription errors | + announcements, offering/giving segments, prayers, greetings (things a transcript-only prompt never saw) |
+| Faithfulness wording | "not present in the transcript" | "not present in the sermon" |
+| User turn | the transcript text itself | a one-line instruction ("Write the reflection for the sermon in this video.") alongside the video part |
+
+**Unchanged:** voice ("we/us/our"), title and Scripture-line rules, 2–4
+emphasis-based headings, 550–700 words (never over 750), plain-text-only output,
+"return only" the finished reflection.
+
+**Generation settings (new, in `frontend/src/lib/gemini.js`):** `gemini-3.8-flash`,
+`thinking_level: low` (prescriptive prompt; deep reasoning mostly adds latency),
+`max_output_tokens: 4096`, `temperature: 1`.
+
+**Trade-off:** the prompt ships in the client bundle and is public.
+
+**Validation (pending):** run 5+ real sermons through the new flow and re-check
+the checklist in `PLAN.md`; watch specifically for the model summarizing worship
+or announcement segments, which the transcript path never exposed it to.
 
 ---
 

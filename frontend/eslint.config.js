@@ -27,8 +27,8 @@ export default [
     languageOptions: { globals: { ...globals.browser, ...globals.vitest } },
   },
   {
-    // Config files run in Node.
-    files: ["*.config.js"],
+    // Config files and one-off scripts run in Node.
+    files: ["*.config.js", "scripts/**/*.mjs"],
     languageOptions: { globals: globals.node },
   },
 ];
