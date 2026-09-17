@@ -108,9 +108,9 @@ export default function App() {
     setArticle("");
     setCopied(false);
 
-    // Deliberately no video id: the page promises the video never reaches us,
-    // and our analytics property is "us".
-    const meta = { provider: PROVIDER, model: MODEL };
+    // The video id is the one thing about the video we record, and the page
+    // says so. Never the article, never the key. `targetUrl` is canonical.
+    const meta = { video_id: new URL(targetUrl).searchParams.get("v"), provider: PROVIDER, model: MODEL };
     trackEvent("generate_submit", meta);
 
     const controller = new AbortController();
@@ -291,7 +291,7 @@ export default function App() {
 
             <p className="trust">
               <Lock size={13} aria-hidden="true" />
-              Runs on your own free Gemini key. Your key and the video never touch our servers.
+              Runs on your own free Gemini key, which never leaves your browser except to Google. We log which video was summarized, never the article or your key.
             </p>
 
             {loading && (

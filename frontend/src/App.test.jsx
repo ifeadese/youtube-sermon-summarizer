@@ -634,9 +634,11 @@ describe("Tagline and trust line", () => {
     expect(screen.queryByText(/captioned/i)).not.toBeInTheDocument();
   });
 
-  it("explains that the key and video never touch our servers", () => {
+  it("states the privacy promise exactly as analytics behaves: key stays with Google, video id is logged", () => {
     renderApp();
-    expect(screen.getByText(/never touch our servers/i)).toBeInTheDocument();
+    const line = screen.getByText(/never leaves your browser except to Google/i);
+    expect(line).toHaveTextContent("We log which video was summarized, never the article or your key.");
+    expect(screen.queryByText(/video never touch/i)).not.toBeInTheDocument();
   });
 });
 
@@ -721,29 +723,38 @@ describe("Analytics events", () => {
     clickGenerate();
     await screen.findByLabelText("Generated article");
 
-    expect(trackEvent).toHaveBeenCalledWith("generate_submit", { provider: "gemini", model: "gemini-test-model" });
+    expect(trackEvent).toHaveBeenCalledWith("generate_submit", {
+      video_id: "dQw4w9WgXcQ",
+      provider: "gemini",
+      model: "gemini-test-model",
+    });
     expect(trackEvent).toHaveBeenCalledWith(
       "generate_success",
-      expect.objectContaining({ word_count: 5, provider: "gemini", model: "gemini-test-model" }),
+      expect.objectContaining({ video_id: "dQw4w9WgXcQ", word_count: 5, provider: "gemini", model: "gemini-test-model" }),
     );
   });
 
-  it("never sends the video to analytics — the page promises it doesn't reach us", async () => {
+  it("records the video id on generate_* events only, and never the article text", async () => {
+    // This is the disclosure on the page: "We log which video was summarized,
+    // never the article or your key." Keep the two in step.
+    const ARTICLE = "My Title\n\nA fine article with a distinctive-phrase-xyz.";
     connectKey();
-    mockArticle("My Title\n\nA fine article.");
+    mockArticle(ARTICLE);
     renderApp();
-    typeUrl();
+    typeUrl("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=30s");
     clickGenerate();
     await screen.findByLabelText("Generated article");
     mockFailure("network", "Could not reach Gemini.");
     clickGenerate();
     await screen.findByRole("alert");
 
-    expect(trackEvent.mock.calls.length).toBeGreaterThan(3);
+    const withId = trackEvent.mock.calls.filter((call) => JSON.stringify(call).includes("dQw4w9WgXcQ")).map(([name]) => name);
+    expect(new Set(withId)).toEqual(new Set(["generate_submit", "generate_success", "generate_error"]));
     for (const call of trackEvent.mock.calls) {
       const serialized = JSON.stringify(call);
-      expect(serialized).not.toContain("dQw4w9WgXcQ");
-      expect(serialized).not.toContain("video_id");
+      expect(serialized).not.toContain("distinctive-phrase-xyz"); // never the article
+      expect(serialized).not.toContain("t=30s"); // the id, not the raw link the user pasted
+      expect(serialized).not.toContain(KEY);
     }
   });
 
