@@ -24,7 +24,7 @@ export default function About() {
             The process is entirely seamless: paste a YouTube sermon link and Gemini watches the video itself, sets aside the worship and announcements, structures the teaching into readable sections with clear headings, and keeps the scripture references exactly as they were preached. In a minute or two, you get a clean, copy-ready article that fully preserves the original message and voice of the speaker.
           </p>
           <p>
-            <strong>How it stays free.</strong> Instead of us paying for every article, you connect your own Gemini key from Google AI Studio, which is free and takes about a minute. Your browser sends the video link and our writing instructions straight to Google. Nothing passes through our servers, and we never see your key.
+            <strong>How it stays free.</strong> Instead of us paying for every article, you connect your own Gemini key from Google AI Studio, which is free and takes about a minute. Your browser sends the video link and our writing instructions straight to Google. Nothing passes through our servers, and we never see your key. We use Google Analytics to count visits and errors; it never receives your key, your video link, or the article.
           </p>
           <p>
             By transforming spoken sermons into structured, SEO-optimized text, we do more than save you time—we expand the reach of your ministry. Written summaries are indexable by search engines, easy to scan, and simple to repurpose into study guides, newsletters, or social media digests, keeping your community connected and fed throughout the week.
