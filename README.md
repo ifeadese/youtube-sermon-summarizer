@@ -10,7 +10,7 @@ Paste a YouTube URL, get a clean, well-written reflection back. No transcript ex
 
 ## How It Stays Free
 
-There is no server and no shared API key. The first time you click Generate, the app asks you to connect your own Gemini key from [Google AI Studio](https://aistudio.google.com/apikey) — free, and enough for 10 to 20 sermons a day depending on their length (Google allows 20 requests and 8 hours of video per key per day). Your browser sends the video link and the writing prompt straight to Google's API. **Your key and the video never touch our servers**, because there aren't any: the site is static. Analytics counts visits and errors only; it never receives the key, the video link, or the article.
+There is no server and no shared API key. The first time you click Generate, the app asks you to connect your own Gemini key from [Google AI Studio](https://aistudio.google.com/apikey) — free, and enough for 10 to 20 sermons a day depending on their length (Google allows 20 requests and 8 hours of video per key per day). Your browser sends the video link and the writing prompt straight to Google's API. **Your key never touches our servers**, because there aren't any: the site is static. Analytics counts visits and errors and records which video was summarized; it never receives the key or the article.
 
 Gemini watches the video itself, so it works on sermons without captions.
 
