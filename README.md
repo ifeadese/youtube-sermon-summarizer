@@ -1,31 +1,34 @@
 # Sermon Summarizer
 
-A simple web app that turns a YouTube sermon into a ready-to-publish blog article — in one click.
+A simple web app that turns a YouTube sermon into a ready-to-publish blog article — in one click, on your own free Gemini key.
 
 ![Sermon Summarizer Home Page](docs/screenshot.png)
 
 ## What It Does
 
-Paste a YouTube URL, get a clean, well-written article back. No manual transcript extraction, no copy-pasting between tools, no inconsistent LLM outputs.
+Paste a YouTube URL, get a clean, well-written reflection back. No transcript extraction, no copy-pasting between tools, no inconsistent LLM outputs.
+
+## How It Stays Free
+
+There is no server and no shared API key. The first time you click Generate, the app asks you to connect your own Gemini key from [Google AI Studio](https://aistudio.google.com/apikey) — free, and enough for roughly ten sermons a day. Your browser sends the video link and the writing prompt straight to Google's API. **Your key and the video never touch our servers**, because there aren't any: the site is static.
+
+Gemini watches the video itself, so it works on sermons without captions.
 
 ## Why
 
-Writing weekly sermon recaps for a church blog currently requires stitching together 4+ unreliable tools manually. This project collapses that entire pipeline into a single, reliable flow.
+Writing weekly sermon recaps for a church blog used to require stitching together several unreliable tools by hand. This project collapses that pipeline into a single flow.
 
 ## Tech Stack
 
-- **Frontend:** React (single page, minimal UI)
-- **Backend:** Python + FastAPI
-- **AI:** Claude API
-- **Transcript:** youtube-transcript-api
+- **Frontend:** React + Vite, a single page, deployed as a static site on Vercel
+- **AI:** Gemini API (Interactions API with YouTube video input), called directly from the browser with the user's key
+- **Backend:** none
 
-## Status
+## Repository Layout
 
-Planning / pre-build — see [Plan](docs/PLAN.md) for full context, strategy, and execution roadmap.
-
-## Docs
-
-- [MVP Plan](docs/PLAN.md) — background, product thinking, roadmap & milestones (all in one doc)
+- `frontend/` — the app. See [frontend/README.md](frontend/README.md) for setup, tests and deploy.
+- `docs/PLAN.md` — the original MVP plan (historical; see the architecture note at the top).
+- `docs/PROMPT_LOG.md` — every change to the writing prompt and why.
 
 ## Philosophy
 
