@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Routes, Route, Link, NavLink, useLocation } from "react-router-dom";
 import { Copy, Check, AlertCircle, Lock } from "lucide-react";
 
-import { generateReflection, MODEL } from "./lib/gemini.js";
+import { canonicalizeYouTubeUrl, generateReflection, MODEL } from "./lib/gemini.js";
 import { clearKey, getKey, setKey } from "./lib/keyStore.js";
 import { initAnalytics, trackEvent, trackPageView } from "./analytics.js";
 import ConnectGeminiModal from "./ConnectGeminiModal.jsx";
@@ -13,32 +13,6 @@ import "./App.css";
 
 const BRAND = "Sermon Summarizer";
 const PROVIDER = "gemini";
-
-function isValidYouTubeUrl(urlString) {
-  try {
-    const parsed = new URL(urlString);
-    const host = parsed.hostname.replace(/^www\./, "");
-    return host === "youtube.com" || host === "youtu.be" || host === "m.youtube.com";
-  } catch {
-    return false;
-  }
-}
-
-function extractYouTubeVideoId(urlString) {
-  try {
-    const parsed = new URL(urlString);
-    const host = parsed.hostname.replace(/^www\./, "");
-    if (host === "youtu.be") {
-      return parsed.pathname.slice(1);
-    }
-    if (parsed.pathname.startsWith("/shorts/")) {
-      return parsed.pathname.split("/")[2];
-    }
-    return parsed.searchParams.get("v");
-  } catch {
-    return null;
-  }
-}
 
 function extractDomain(urlString) {
   try {
@@ -106,21 +80,24 @@ export default function App() {
     event.preventDefault();
     if (inFlight.current) return;
 
-    const trimmed = url.trim();
-    if (!isValidYouTubeUrl(trimmed)) {
-      trackEvent("invalid_url_attempt", { domain: extractDomain(trimmed) });
+    // One definition of "a YouTube video link", shared with the client: a
+    // playlist or channel page is refused here, before the key dialog opens,
+    // and music./scheme-less/timestamped links are accepted and normalised.
+    const videoUrl = canonicalizeYouTubeUrl(url);
+    if (!videoUrl) {
+      trackEvent("invalid_url_attempt", { domain: extractDomain(url.trim()) });
       setError("Please enter a valid YouTube URL.");
       return;
     }
 
     const key = getKey();
     if (!key) {
-      pendingUrl.current = trimmed;
+      pendingUrl.current = videoUrl;
       setError("");
       openModal("connect");
       return;
     }
-    runGeneration(trimmed, key);
+    runGeneration(videoUrl, key);
   }
 
   async function runGeneration(targetUrl, key) {
@@ -131,7 +108,9 @@ export default function App() {
     setArticle("");
     setCopied(false);
 
-    const meta = { video_id: extractYouTubeVideoId(targetUrl), provider: PROVIDER, model: MODEL };
+    // Deliberately no video id: the page promises the video never reaches us,
+    // and our analytics property is "us".
+    const meta = { provider: PROVIDER, model: MODEL };
     trackEvent("generate_submit", meta);
 
     const controller = new AbortController();
@@ -275,7 +254,10 @@ export default function App() {
                   ▶
                 </span>
                 <input
-                  type="url"
+                  // text + inputMode, not type="url": the browser's own URL check
+                  // rejects scheme-less links ("youtube.com/watch?v=…") that we accept.
+                  type="text"
+                  inputMode="url"
                   className="url-input"
                   placeholder="https://www.youtube.com/watch?v=…"
                   value={url}

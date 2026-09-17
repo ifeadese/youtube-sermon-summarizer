@@ -12,7 +12,8 @@
 // Bump on any breaking change to event names/params so historical data and
 // future A/A baselines stay comparable. See issue #45 (event governance).
 // v2: generation runs in the browser on the user's own Gemini key —
-// generate_* events gain `provider` + `model`; new connect_open /
+// generate_* events gain `provider` + `model` and DROP `video_id` (the site
+// promises the video never reaches us, and this property is us); new connect_open /
 // connect_success / connect_error / key_forgotten / generate_cancel events.
 // Never put the key (or any part of it) in an event.
 const SCHEMA_VERSION = 2;

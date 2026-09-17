@@ -19,12 +19,11 @@ vi.mock("./analytics.js", () => ({
 // The Gemini client is mocked at the module boundary: these tests cover the
 // UI's behaviour around it (connect flow, streaming, errors), while
 // lib/gemini.test.js covers the wire format.
-vi.mock("./lib/gemini.js", () => ({
+vi.mock("./lib/gemini.js", async (importOriginal) => ({
+  ...(await importOriginal()), // keep the real canonicalizeYouTubeUrl
   generateReflection: vi.fn(),
   validateKey: vi.fn(),
   MODEL: "gemini-test-model",
-  MODEL_LABEL: "Gemini Flash",
-  AI_STUDIO_KEY_URL: "https://aistudio.google.com/apikey",
 }));
 
 const KEY = "AIzaTESTKEY00000000000000000000000000000";
@@ -93,6 +92,35 @@ describe("App", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Please enter a valid YouTube URL.");
     expect(trackEvent).toHaveBeenCalledWith("invalid_url_attempt", { domain: "example.com" });
     expect(generateReflection).not.toHaveBeenCalled();
+  });
+
+  it.each(["https://www.youtube.com/playlist?list=PL123", "https://www.youtube.com/@somechurch", "https://www.youtube.com/watch?v=short"])(
+    "refuses %j up front, without opening the key dialog",
+    async (link) => {
+      renderApp();
+      typeUrl(link);
+      clickGenerate();
+      expect(await screen.findByRole("alert")).toHaveTextContent("Please enter a valid YouTube URL.");
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(generateReflection).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([
+    "https://music.youtube.com/watch?v=dQw4w9WgXcQ",
+    "youtube.com/watch?v=dQw4w9WgXcQ",
+    "https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=30s",
+    "https://www.youtube.com/live/dQw4w9WgXcQ",
+    "https://youtu.be/dQw4w9WgXcQ?si=abc",
+  ])("accepts %j and sends the canonical video URL", async (link) => {
+    connectKey();
+    mockArticle("ok");
+    renderApp();
+    typeUrl(link);
+    const form = screen.getByLabelText("YouTube URL").closest("form");
+    fireEvent.submit(form); // a scheme-less link fails the browser's type=url check, so submit directly
+    await screen.findByLabelText("Generated article");
+    expect(generateReflection.mock.calls[0][0].url).toBe(URL);
   });
 
   it("shows the streamed reflection on success", async () => {
@@ -693,15 +721,30 @@ describe("Analytics events", () => {
     clickGenerate();
     await screen.findByLabelText("Generated article");
 
-    expect(trackEvent).toHaveBeenCalledWith("generate_submit", {
-      video_id: "dQw4w9WgXcQ",
-      provider: "gemini",
-      model: "gemini-test-model",
-    });
+    expect(trackEvent).toHaveBeenCalledWith("generate_submit", { provider: "gemini", model: "gemini-test-model" });
     expect(trackEvent).toHaveBeenCalledWith(
       "generate_success",
-      expect.objectContaining({ video_id: "dQw4w9WgXcQ", word_count: 5, provider: "gemini", model: "gemini-test-model" }),
+      expect.objectContaining({ word_count: 5, provider: "gemini", model: "gemini-test-model" }),
     );
+  });
+
+  it("never sends the video to analytics — the page promises it doesn't reach us", async () => {
+    connectKey();
+    mockArticle("My Title\n\nA fine article.");
+    renderApp();
+    typeUrl();
+    clickGenerate();
+    await screen.findByLabelText("Generated article");
+    mockFailure("network", "Could not reach Gemini.");
+    clickGenerate();
+    await screen.findByRole("alert");
+
+    expect(trackEvent.mock.calls.length).toBeGreaterThan(3);
+    for (const call of trackEvent.mock.calls) {
+      const serialized = JSON.stringify(call);
+      expect(serialized).not.toContain("dQw4w9WgXcQ");
+      expect(serialized).not.toContain("video_id");
+    }
   });
 
   it("tracks generate_error with a useful error_type on failure", async () => {

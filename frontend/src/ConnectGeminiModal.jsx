@@ -132,7 +132,7 @@ function ConnectDialog({ mode = "connect", initialError = "", onConnected, onFor
         <p className="modal__lead">
           {manage
             ? `${MODEL_LABEL} is connected. Paste a new key to replace it, or forget it to disconnect.`
-            : "Takes about a minute. Google gives you a free key with enough for roughly ten sermons a day."}
+            : "Takes about a minute. Google's free key covers 10 to 20 sermons a day, depending on their length."}
         </p>
 
         <form className="connect-form" onSubmit={handleSubmit} noValidate>
