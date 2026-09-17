@@ -19,6 +19,7 @@ import {
   buildRequestBody,
   canonicalizeYouTubeUrl,
   classify,
+  cleanPastedKey,
   generateReflection,
   parseErrorBody,
   readSse,
@@ -36,7 +37,7 @@ const REFLECTION = `Surrounded by Grace\n\nHebrews 12:1-2\n\n${words(260)}`;
 const frame = (name, data) => `event: ${name}\ndata: ${typeof data === "string" ? data : JSON.stringify(data)}\n\n`;
 const delta = (text) => frame("step.delta", { index: 1, delta: { type: "text", text }, event_type: "step.delta" });
 
-// WIRE: usage block of a real 30-minute sermon at low resolution.
+// WIRE: usage block of a real 13.6-minute (817 s) sermon at low resolution: ~91 tokens per second.
 const usageWire = ({ video = 74351 } = {}) => ({
   total_tokens: 75680,
   total_input_tokens: 74973,
@@ -289,9 +290,25 @@ describe("classify", () => {
     expect(classify(status, envelope(status, "PERMISSION_DENIED", "msg", reason)).type).toBe(type);
   });
 
-  it("treats a 401/403 with no reason and no Interactions code as a key problem", () => {
-    expect(classify(403, envelope(403, "PERMISSION_DENIED", "Method doesn't allow unregistered callers")).type).toBe("invalid_key"); // WIRE: empty key
-    expect(classify(401, null).type).toBe("invalid_key");
+  it("treats an unexplained 401/403 as a refusal, never as proof the key is dead", () => {
+    for (const err of [
+      classify(403, envelope(403, "PERMISSION_DENIED", "Method doesn't allow unregistered callers")),
+      classify(403, envelope(403, "PERMISSION_DENIED", "x", "SOME_NEW_REASON_GOOGLE_ADDS_NEXT_YEAR")),
+      classify(401, null),
+    ]) {
+      expect(err.type).toBe("access_denied");
+      expect(err.definitive).toBeUndefined();
+      expect(err.message).toMatch(/still saved/);
+    }
+  });
+
+  it("marks a key error definitive only for Google's explicit dead-key signals", () => {
+    expect(classify(400, badKeyEnvelope)).toMatchObject({ type: "invalid_key", definitive: true });
+    expect(classify(400, envelope(400, "INVALID_ARGUMENT", "expired", "API_KEY_EXPIRED"))).toMatchObject({ type: "invalid_key", definitive: true });
+    expect(classify(401, { error: { code: "authentication", message: "x" } })).toMatchObject({ type: "invalid_key", definitive: true });
+    for (const reason of ["API_KEY_HTTP_REFERRER_BLOCKED", "SERVICE_DISABLED", "BILLING_DISABLED"]) {
+      expect(classify(403, envelope(403, "PERMISSION_DENIED", "x", reason)).definitive).toBeUndefined();
+    }
   });
 
   it("reads an HTTP 403 carrying the Interactions `permission_denied` code as a video problem, not a key problem", () => {
@@ -705,7 +722,7 @@ describe("validateKey", () => {
     fetchMock.mockResolvedValueOnce(json(badKeyEnvelope, 400));
     await expect(validateKey(KEY)).rejects.toMatchObject({ type: "invalid_key", status: 400 });
     fetchMock.mockResolvedValueOnce(json(envelope(403, "PERMISSION_DENIED", "Forbidden"), 403));
-    await expect(validateKey(KEY)).rejects.toMatchObject({ type: "invalid_key", status: 403 });
+    await expect(validateKey(KEY)).rejects.toMatchObject({ type: "access_denied", status: 403 });
     fetchMock.mockResolvedValueOnce(json(envelope(403, "PERMISSION_DENIED", "blocked", "API_KEY_HTTP_REFERRER_BLOCKED"), 403));
     await expect(validateKey(KEY)).rejects.toMatchObject({ type: "key_restricted" });
   });
@@ -740,6 +757,42 @@ describe("validateKey", () => {
     const promise = validateKey(KEY, { signal: caller.signal });
     caller.abort();
     await expect(promise).rejects.toMatchObject({ type: "cancelled" });
+  });
+});
+
+describe("cleanPastedKey", () => {
+  it.each([
+    [KEY, "the bare key"],
+    [`  ${KEY}\n`, "surrounding whitespace"],
+    [`"${KEY}"`, "double quotes"],
+    [`'${KEY}'`, "single quotes"],
+    [`GEMINI_API_KEY=${KEY}`, "a .env line"],
+    [`export GOOGLE_API_KEY="${KEY}"`, "an export line with quotes"],
+    [`GEMINI_API_KEY = ${KEY}`, "spaces around ="],
+  ])("reduces %j (%s) to the bare key", (pasted) => {
+    expect(cleanPastedKey(pasted)).toBe(KEY);
+  });
+
+  it("never rejects an unfamiliar key format, and the client sends the cleaned key", async () => {
+    expect(cleanPastedKey("AQ.Ab8RN6-some-other-format")).toBe("AQ.Ab8RN6-some-other-format");
+    fetchMock.mockResolvedValue(modelGetOk());
+    await validateKey(`GEMINI_API_KEY="${KEY}"`);
+    expect(fetchMock.mock.calls[0][1].headers["x-goog-api-key"]).toBe(KEY);
+  });
+});
+
+describe("mid-stream connection loss", () => {
+  it("maps a read failure after text has started to interrupted, not 'unexpected response'", async () => {
+    fetchMock.mockImplementation(async () => {
+      let ctrl;
+      const stream = new ReadableStream({ start: (c) => (ctrl = c) });
+      queueMicrotask(() => {
+        ctrl.enqueue(enc.encode(delta("Surrounded by")));
+        queueMicrotask(() => ctrl.error(new TypeError("network error")));
+      });
+      return new Response(stream, { status: 200 });
+    });
+    await expect(run()).rejects.toMatchObject({ type: "interrupted" });
   });
 });
 

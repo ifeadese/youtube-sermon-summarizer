@@ -238,11 +238,14 @@
   outline-offset: 2px;
 }
 
-.generate-btn:disabled {
+.generate-btn:disabled,
+.generate-btn[aria-disabled="true"] {
   background: var(--surface-sunken);
   color: var(--ink-faint);
   box-shadow: none;
   cursor: not-allowed;
+  transform: none;
+  filter: none;
 }
 
 .dots {
@@ -1111,6 +1114,7 @@
   width: 100%;
   max-width: 28rem;
   max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem); /* keeps the buttons above the iOS keyboard */
   overflow-y: auto;
   padding: 1.6rem 1.6rem 1.3rem;
   background: var(--surface);
@@ -1208,7 +1212,7 @@
   min-width: 0;
   padding: 0.7rem 0.85rem;
   font-family: var(--font-sans);
-  font-size: 0.95rem;
+  font-size: 1rem; /* 16px: anything smaller makes iOS Safari zoom the auto-focused field */
   color: var(--ink);
   background: transparent;
   border: none;
@@ -1330,6 +1334,35 @@
   color: var(--ink-faint);
   font-size: 0.82rem;
   line-height: 1.45;
+}
+
+.modal__foot + .modal__foot {
+  margin-top: 0.6rem;
+}
+
+.modal__foot a {
+  color: var(--plum);
+  text-decoration: underline;
+  text-decoration-color: var(--gold);
+  text-underline-offset: 0.15em;
+}
+
+.modal__hint {
+  margin: 0.45rem 0 0;
+  color: var(--ink-faint);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.status__timer {
+  margin-left: 0.6rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+}
+
+.action-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 @media (max-width: 34rem) {

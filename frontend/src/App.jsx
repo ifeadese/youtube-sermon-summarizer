@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Routes, Route, Link, NavLink, useLocation } from "react-router-dom";
+import { Routes, Route, Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { Copy, Check, AlertCircle, Lock } from "lucide-react";
 
 import { canonicalizeYouTubeUrl, generateReflection, MODEL } from "./lib/gemini.js";
-import { clearKey, getKey, setKey } from "./lib/keyStore.js";
+import { clearKey, getKey, setKey, subscribeToKeyChanges } from "./lib/keyStore.js";
 import { initAnalytics, trackEvent, trackPageView } from "./analytics.js";
 import ConnectGeminiModal from "./ConnectGeminiModal.jsx";
 import ProviderChip from "./ProviderChip.jsx";
@@ -27,6 +27,13 @@ function countWords(text) {
   return text.trim() ? text.trim().split(/\s+/).length : 0;
 }
 
+function formatElapsed(ms) {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor(total / 60);
+  const seconds = String(total % 60).padStart(2, "0");
+  return `${minutes}:${seconds}`;
+}
+
 const CLOSED_MODAL = { open: false, mode: "connect", error: "" };
 
 export default function App() {
@@ -37,14 +44,23 @@ export default function App() {
   const [copied, setCopied] = useState(false);
   const [hasKey, setHasKey] = useState(() => Boolean(getKey()));
   const [modal, setModal] = useState(CLOSED_MODAL);
+  // One persistent polite live region: screen readers announce changes to it,
+  // but not text that is already there when it mounts.
+  const [announcement, setAnnouncement] = useState("");
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const [retrying, setRetrying] = useState(false);
 
   const inFlight = useRef(false);
   const copyTimer = useRef(null);
   const abortRef = useRef(null);
   // A URL submitted before a key existed; generated as soon as the key connects.
   const pendingUrl = useRef("");
+  const startedAtRef = useRef(0);
+  const resultRef = useRef(null);
+  const scrolledToResult = useRef(false);
 
   const location = useLocation();
+  const navigate = useNavigate();
 
   useEffect(() => {
     initAnalytics();
@@ -61,6 +77,28 @@ export default function App() {
     },
     [],
   );
+
+  // Another tab connected or forgot the key: keep the chip honest.
+  useEffect(() => subscribeToKeyChanges(() => setHasKey(Boolean(getKey()))), []);
+
+  // Elapsed time while Gemini reads the video (the silent phase is 25 s to
+  // several minutes). Visible only; the live region is not updated every second.
+  useEffect(() => {
+    if (!loading) return undefined;
+    const id = setInterval(() => setElapsedMs(Date.now() - startedAtRef.current), 1000);
+    return () => clearInterval(id);
+  }, [loading]);
+
+  // Bring the reading pane into view when the first text arrives. No
+  // follow-the-stream scrolling: real streams finish within a second or two,
+  // and pinning to the bottom would leave the reader at the end of the article.
+  useEffect(() => {
+    if (loading && article && !scrolledToResult.current) {
+      scrolledToResult.current = true;
+      resultRef.current?.scrollIntoView?.({ block: "start", behavior: "smooth" });
+    }
+    if (!loading) scrolledToResult.current = false;
+  }, [loading, article]);
 
   const stats = useMemo(() => {
     const words = countWords(article);
@@ -103,10 +141,14 @@ export default function App() {
   async function runGeneration(targetUrl, key) {
     if (inFlight.current) return;
     inFlight.current = true;
+    startedAtRef.current = Date.now();
+    setElapsedMs(0);
+    setRetrying(false);
     setLoading(true);
     setError("");
     setArticle("");
     setCopied(false);
+    setAnnouncement("Generating. Gemini is watching the sermon and writing the reflection.");
 
     // The video id is the one thing about the video we record, and the page
     // says so. Never the article, never the key. `targetUrl` is canonical.
@@ -127,8 +169,13 @@ export default function App() {
           if (!firstTextAt) firstTextAt = Date.now();
           setArticle((current) => current + chunk);
         },
+        onRetry: () => {
+          setRetrying(true);
+          trackEvent("generate_retry", meta);
+        },
       });
       setArticle(result);
+      setAnnouncement(`Reflection ready, ${countWords(result)} words.`);
       trackEvent("generate_success", {
         ...meta,
         latency_ms: Date.now() - startedAt,
@@ -137,15 +184,23 @@ export default function App() {
       });
     } catch (err) {
       setArticle("");
+      setAnnouncement(err?.type === "cancelled" ? "Generation cancelled." : "");
       if (err?.type === "cancelled") {
         trackEvent("generate_cancel", { ...meta, latency_ms: Date.now() - startedAt });
-      } else if (err?.type === "invalid_key") {
-        // The stored key stopped working (revoked, or pasted wrong): forget it
-        // and ask again, keeping the URL so the retry is one click.
+      } else if (err?.type === "invalid_key" && err.definitive) {
+        // Google said in so many words that the stored key is dead (revoked or
+        // expired): forget it and ask again, keeping the URL so the retry is
+        // one click. Nothing less than that definitive signal clears a key.
         clearKey();
         setHasKey(false);
         pendingUrl.current = targetUrl;
         openModal("connect", err.message);
+        trackEvent("generate_error", { ...meta, error_type: "invalid_key", status: err?.status || 0 });
+      } else if (err?.type === "invalid_key") {
+        // Rejected, but not provably dead: keep the key, show the message in
+        // the manage dialog so the user can replace it if they want to.
+        pendingUrl.current = targetUrl;
+        openModal("manage", err.message);
         trackEvent("generate_error", { ...meta, error_type: "invalid_key", status: err?.status || 0 });
       } else {
         setError(err?.message || "Something went wrong. Please try again.");
@@ -168,7 +223,12 @@ export default function App() {
     const next = pendingUrl.current;
     pendingUrl.current = "";
     setModal(CLOSED_MODAL);
-    if (next) runGeneration(next, key);
+    if (next) {
+      // The dialog can outlive a route change (browser Back while it is open);
+      // the result only renders on the home page.
+      if (location.pathname !== "/") navigate("/");
+      runGeneration(next, key);
+    }
   }
 
   function handleForget() {
@@ -266,9 +326,18 @@ export default function App() {
                   autoComplete="off"
                   spellCheck="false"
                   aria-label="YouTube URL"
+                  data-focus-fallback
                 />
               </div>
-              <button type="submit" className="generate-btn" disabled={loading || !url.trim()}>
+              <button
+                type="submit"
+                className="generate-btn"
+                // aria-disabled, not disabled, while generating: a disabled
+                // button drops keyboard focus to <body>. handleSubmit ignores
+                // the click via the inFlight guard.
+                disabled={!loading && !url.trim()}
+                aria-disabled={loading || undefined}
+              >
                 {loading ? (
                   <>
                     <span className="dots" aria-hidden="true">
@@ -294,9 +363,15 @@ export default function App() {
               Runs on your own free Gemini key, which never leaves your browser except to Google. We log which video was summarized, never the article or your key.
             </p>
 
+            <p className="visually-hidden" role="status">
+              {announcement}
+            </p>
             {loading && (
-              <p className="status" role="status">
-                Gemini is watching the sermon and writing the reflection — usually a minute or two.
+              <p className="status" aria-hidden="true">
+                {retrying
+                  ? "Gemini was busy — trying once more."
+                  : "Gemini is watching the sermon and writing the reflection. A full service can take a few minutes."}
+                <span className="status__timer">{formatElapsed(elapsedMs)}</span>
               </p>
             )}
 
@@ -312,7 +387,7 @@ export default function App() {
             )}
 
             {article && (
-              <section className="result">
+              <section className="result" ref={resultRef}>
                 <div className="result-bar">
                   <span className="result-meta">
                     {stats.words.toLocaleString()} words · {stats.minutes} min read
@@ -322,8 +397,11 @@ export default function App() {
                       type="button"
                       className="action-btn icon-only"
                       onClick={handleCopy}
+                      // Not until the client has accepted the result: text on
+                      // screen mid-stream may still be rejected and discarded.
+                      disabled={loading}
                       aria-label={copied ? "Copied" : "Copy text"}
-                      title={copied ? "Copied!" : "Copy Text"}
+                      title={loading ? "Available when the reflection is finished" : copied ? "Copied!" : "Copy Text"}
                     >
                       {copied ? <Check size={16} /> : <Copy size={16} />}
                     </button>

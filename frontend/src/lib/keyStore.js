@@ -4,8 +4,9 @@
  * "Remember on this device" → localStorage (survives reloads and restarts).
  * Otherwise → sessionStorage (gone when the tab closes). If storage is blocked
  * (private mode, strict settings) the key is kept in memory for this page load
- * so the app still works. Every storage access is wrapped: a throwing storage
- * API must never break the UI.
+ * so the app still works — and ONLY then, so that a key forgotten in another
+ * tab is not quietly resurrected from this tab's memory. Every storage access
+ * is wrapped: a throwing storage API must never break the UI.
  */
 
 const STORAGE_KEY = "sermon.gemini.key";
@@ -52,12 +53,17 @@ export function setKey(key, { remember = true } = {}) {
   clearKey();
   const value = String(key || "").trim();
   if (!value) return;
-  memoryKey = value;
+  let persisted = false;
   try {
-    store(remember ? "local" : "session")?.setItem(STORAGE_KEY, value);
+    const target = store(remember ? "local" : "session");
+    if (target) {
+      target.setItem(STORAGE_KEY, value);
+      persisted = target.getItem(STORAGE_KEY) === value;
+    }
   } catch {
-    // storage blocked — memoryKey still holds it for this page load
+    persisted = false;
   }
+  if (!persisted) memoryKey = value; // storage blocked — keep it for this page load only
 }
 
 /** Forget the key everywhere. */
@@ -65,4 +71,18 @@ export function clearKey() {
   memoryKey = "";
   remove("local");
   remove("session");
+}
+
+/**
+ * Call `listener` when another tab changes or forgets the remembered key.
+ * (The `storage` event fires only in OTHER tabs, and only for localStorage.)
+ * Returns an unsubscribe function.
+ */
+export function subscribeToKeyChanges(listener) {
+  if (typeof window === "undefined") return () => {};
+  const onStorage = (event) => {
+    if (event.key === STORAGE_KEY || event.key === null) listener();
+  };
+  window.addEventListener("storage", onStorage);
+  return () => window.removeEventListener("storage", onStorage);
 }

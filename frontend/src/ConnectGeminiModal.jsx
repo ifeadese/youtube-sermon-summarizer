@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AlertCircle, ExternalLink, Eye, EyeOff } from "lucide-react";
 
-import { AI_STUDIO_KEY_URL, MODEL_LABEL, validateKey } from "./lib/gemini.js";
+import { AI_STUDIO_KEY_URL, GEMINI_TERMS_URL, MODEL_LABEL, cleanPastedKey, validateKey } from "./lib/gemini.js";
 import { trackEvent } from "./analytics.js";
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -18,6 +19,11 @@ export default function ConnectGeminiModal(props) {
   return <ConnectDialog {...props} />;
 }
 
+/** Where focus goes on close when the opener is gone or was never an element (the dialog opened itself). */
+function focusFallback() {
+  return document.querySelector("[data-focus-fallback]") ?? document.querySelector(".chip");
+}
+
 function ConnectDialog({ mode = "connect", initialError = "", onConnected, onForget, onClose }) {
   const [keyInput, setKeyInput] = useState("");
   const [remember, setRemember] = useState(true);
@@ -27,21 +33,30 @@ function ConnectDialog({ mode = "connect", initialError = "", onConnected, onFor
 
   const dialogRef = useRef(null);
   const inputRef = useRef(null);
-  const testingRef = useRef(false);
+  const testRef = useRef(null); // AbortController for the key test in flight
 
   const manage = mode === "manage";
+  const cleaned = cleanPastedKey(keyInput);
+  const unusualFormat = cleaned.length > 0 && !cleaned.startsWith("AIza");
 
-  // On open: log it, move focus into the dialog, lock page scroll. On close:
-  // restore scroll and focus. No state is set here.
+  // On open: log it, make the page behind inert, move focus in, lock scroll.
+  // On close: undo all of that, abort any key test still running, and put
+  // focus back where it was — or, when the dialog opened itself (a stored key
+  // failed mid-generation) and the opener is <body> or gone, on the URL field.
   useEffect(() => {
     trackEvent("connect_open", { mode });
     const previouslyFocused = document.activeElement;
     const previousOverflow = document.body.style.overflow;
+    const page = document.getElementById("root");
     document.body.style.overflow = "hidden";
+    if (page) page.inert = true;
     inputRef.current?.focus();
     return () => {
+      testRef.current?.abort();
       document.body.style.overflow = previousOverflow;
-      if (previouslyFocused && typeof previouslyFocused.focus === "function") previouslyFocused.focus();
+      if (page) page.inert = false;
+      const opener = previouslyFocused && previouslyFocused !== document.body && previouslyFocused.isConnected ? previouslyFocused : null;
+      (opener ?? focusFallback())?.focus?.();
     };
   }, [mode]);
 
@@ -52,7 +67,7 @@ function ConnectDialog({ mode = "connect", initialError = "", onConnected, onFor
     function onKeyDown(event) {
       if (event.key === "Escape") {
         event.preventDefault();
-        if (!testingRef.current) onClose?.();
+        onClose?.();
         return;
       }
       if (event.key !== "Tab" || !dialogRef.current) return;
@@ -77,33 +92,30 @@ function ConnectDialog({ mode = "connect", initialError = "", onConnected, onFor
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [onClose]);
 
-  function requestClose() {
-    if (testingRef.current) return;
-    onClose?.();
-  }
-
   function handleBackdropMouseDown(event) {
-    if (event.target === event.currentTarget) requestClose();
+    if (event.target === event.currentTarget) onClose?.();
   }
 
   async function handleSubmit(event) {
     event.preventDefault();
-    if (testingRef.current) return;
-    const key = keyInput.trim();
+    if (testRef.current) return;
+    const key = cleanPastedKey(keyInput);
     if (!key) {
       setError("Paste your API key first.");
       return;
     }
-    testingRef.current = true;
+    const controller = new AbortController();
+    testRef.current = controller;
     setTesting(true);
     setError("");
     try {
-      await validateKey(key);
+      await validateKey(key, { signal: controller.signal });
+      testRef.current = null;
       trackEvent("connect_success", { remember });
-      testingRef.current = false;
       onConnected?.(key, { remember });
     } catch (err) {
-      testingRef.current = false;
+      testRef.current = null;
+      if (err?.type === "cancelled") return; // the user closed the dialog mid-test
       setTesting(false);
       setError(err?.message || "That key didn't work. Please try again.");
       trackEvent("connect_error", { error_type: err?.type || "unknown", status: err?.status || 0 });
@@ -117,22 +129,23 @@ function ConnectDialog({ mode = "connect", initialError = "", onConnected, onFor
     onForget?.();
   }
 
-  return (
+  const dialog = (
     <div className="modal-backdrop" onMouseDown={handleBackdropMouseDown}>
       <div
         className="modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="connect-title"
+        aria-describedby="connect-lead"
         ref={dialogRef}
       >
         <h2 id="connect-title" className="modal__title">
           {manage ? "Manage your Gemini key" : "Connect Gemini"}
         </h2>
-        <p className="modal__lead">
+        <p id="connect-lead" className="modal__lead">
           {manage
             ? `${MODEL_LABEL} is connected. Paste a new key to replace it, or forget it to disconnect.`
-            : "Takes about a minute. Google's free key covers 10 to 20 sermons a day, depending on their length."}
+            : "Takes about a minute. Google's free key allows up to 20 requests and 8 hours of video a day."}
         </p>
 
         <form className="connect-form" onSubmit={handleSubmit} noValidate>
@@ -150,6 +163,7 @@ function ConnectDialog({ mode = "connect", initialError = "", onConnected, onFor
                   Google AI Studio
                   <ExternalLink size={13} aria-hidden="true" className="connect-steps__ext" />
                 </a>
+                . Make one just for this site, so you can revoke it any time.
               </div>
             </li>
             <li>
@@ -169,7 +183,12 @@ function ConnectDialog({ mode = "connect", initialError = "", onConnected, onFor
                       if (error) setError("");
                     }}
                     autoComplete="off"
+                    autoCapitalize="none"
+                    autoCorrect="off"
                     spellCheck="false"
+                    data-1p-ignore
+                    data-lpignore="true"
+                    data-bwignore
                     disabled={testing}
                   />
                   <button
@@ -182,6 +201,9 @@ function ConnectDialog({ mode = "connect", initialError = "", onConnected, onFor
                     {show ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
+                {unusualFormat && !error && (
+                  <p className="modal__hint">Keys from AI Studio usually start with AIza. We'll test this one anyway.</p>
+                )}
               </div>
             </li>
           </ol>
@@ -210,7 +232,7 @@ function ConnectDialog({ mode = "connect", initialError = "", onConnected, onFor
               </button>
             )}
             <span className="modal__spacer" />
-            <button type="button" className="btn btn--ghost" onClick={requestClose} disabled={testing}>
+            <button type="button" className="btn btn--ghost" onClick={() => onClose?.()}>
               Cancel
             </button>
             <button type="submit" className="generate-btn" disabled={testing}>
@@ -222,7 +244,18 @@ function ConnectDialog({ mode = "connect", initialError = "", onConnected, onFor
         <p className="modal__foot">
           Stored only in this browser, never on our servers. Forget it any time from the Gemini button at the top.
         </p>
+        <p className="modal__foot">
+          Free keys: Google may use what you send to improve its products, and its reviewers may read it. You must be
+          18 or older. In the EEA, UK or Switzerland, Google's terms require a key with billing enabled.{" "}
+          <a href={GEMINI_TERMS_URL} target="_blank" rel="noopener noreferrer">
+            Gemini API terms
+            <ExternalLink size={11} aria-hidden="true" className="connect-steps__ext" />
+          </a>
+        </p>
       </div>
     </div>
   );
+
+  // Rendered outside the app root so the page behind can be made inert.
+  return createPortal(dialog, document.body);
 }

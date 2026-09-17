@@ -27,6 +27,9 @@ export default function About() {
             <strong>How it stays free.</strong> Instead of us paying for every article, you connect your own Gemini key from Google AI Studio, which is free and takes about a minute. Your browser sends the video link and our writing instructions straight to Google. Nothing passes through our servers, and we never see your key. We use Google Analytics to count visits and errors, and it records which video was summarized. It never receives your key or the article.
           </p>
           <p>
+            <strong>Before you connect a key.</strong> Google's free tier comes with conditions: Google may use what you send to improve its products, and its reviewers may read it; you must be 18 or older; and in the EEA, UK or Switzerland, Google's terms require a key with billing enabled. Read the <a href="https://ai.google.dev/gemini-api/terms" target="_blank" rel="noopener noreferrer">Gemini API terms</a> before you decide. Make a key just for this site so you can revoke it any time.
+          </p>
+          <p>
             By transforming spoken sermons into structured, SEO-optimized text, we do more than save you time—we expand the reach of your ministry. Written summaries are indexable by search engines, easy to scan, and simple to repurpose into study guides, newsletters, or social media digests, keeping your community connected and fed throughout the week.
           </p>
         </div>
