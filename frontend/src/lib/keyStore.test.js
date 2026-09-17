@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { clearKey, getKey, isRemembered, setKey } from "./keyStore.js";
+import { clearKey, getKey, isRemembered, setKey, subscribeToKeyChanges } from "./keyStore.js";
 
 const STORAGE_KEY = "sermon.gemini.key";
 
@@ -56,6 +56,24 @@ describe("keyStore", () => {
   it("ignores an empty key", () => {
     setKey("   ");
     expect(getKey()).toBe("");
+  });
+
+  it("does not resurrect from memory a key that another tab forgot", () => {
+    setKey("AIzaTEST", { remember: true }); // this tab connected it
+    window.localStorage.removeItem(STORAGE_KEY); // other tab: Forget key
+    expect(getKey()).toBe("");
+  });
+
+  it("notifies on storage events for this key (or a clear), and unsubscribes", () => {
+    const listener = vi.fn();
+    const off = subscribeToKeyChanges(listener);
+    window.dispatchEvent(new StorageEvent("storage", { key: STORAGE_KEY, newValue: null }));
+    window.dispatchEvent(new StorageEvent("storage", { key: "unrelated", newValue: "x" }));
+    window.dispatchEvent(new StorageEvent("storage", { key: null }));
+    expect(listener).toHaveBeenCalledTimes(2);
+    off();
+    window.dispatchEvent(new StorageEvent("storage", { key: STORAGE_KEY, newValue: "y" }));
+    expect(listener).toHaveBeenCalledTimes(2);
   });
 
   it("falls back to memory when storage throws", () => {

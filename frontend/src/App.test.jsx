@@ -54,8 +54,8 @@ function mockArticle(text) {
   });
 }
 
-function mockFailure(type, message, status) {
-  generateReflection.mockRejectedValue(Object.assign(new Error(message), { type, status }));
+function mockFailure(type, message, status, extra = {}) {
+  generateReflection.mockRejectedValue(Object.assign(new Error(message), { type, status, ...extra }));
 }
 
 function renderApp(initialEntries = ["/"]) {
@@ -71,6 +71,10 @@ function clickGenerate() {
 }
 
 const dialog = () => screen.getByRole("dialog");
+// The visible loading line (aria-hidden); the live region carries a different sentence.
+const WATCHING = /A full service can take a few minutes/;
+const waitForGenerating = () => screen.findByText(WATCHING);
+const status = () => screen.getByRole("status");
 
 describe("App", () => {
   it("renders the app heading (the #8 acceptance criterion)", () => {
@@ -147,15 +151,19 @@ describe("App", () => {
     typeUrl();
     clickGenerate();
 
-    await screen.findByRole("status");
+    await waitForGenerating();
     act(() => sendDelta("Grace "));
     expect(await screen.findByLabelText("Generated article")).toHaveTextContent("Grace");
+    // Copy is not offered on text the client may still reject.
+    expect(screen.getByRole("button", { name: /copy text/i })).toBeDisabled();
     act(() => sendDelta("and peace."));
     expect(screen.getByLabelText("Generated article")).toHaveTextContent("Grace and peace.");
 
     await act(async () => finish("Grace and peace."));
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.queryByText(WATCHING)).not.toBeInTheDocument();
+    expect(status()).toHaveTextContent("Reflection ready, 3 words.");
     expect(screen.getByLabelText("Generated article")).toHaveTextContent("Grace and peace.");
+    expect(screen.getByRole("button", { name: /copy text/i })).toBeEnabled();
   });
 
   it("shows the client's friendly message for a typed failure", async () => {
@@ -240,14 +248,19 @@ describe("App", () => {
     typeUrl();
     clickGenerate();
 
-    expect(await screen.findByRole("status")).toHaveTextContent("Gemini is watching the sermon");
-    expect(screen.getByRole("button", { name: /generat/i })).toBeDisabled();
+    await waitForGenerating();
+    expect(status()).toHaveTextContent("Generating");
+    // aria-disabled, not disabled: a disabled button would drop focus to <body>.
+    const generate = screen.getByRole("button", { name: /generat/i });
+    expect(generate).toHaveAttribute("aria-disabled", "true");
+    expect(generate).not.toBeDisabled();
     expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
 
     await act(async () => finish("done"));
 
     await screen.findByLabelText("Generated article");
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.queryByText(WATCHING)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Generate Article" })).not.toHaveAttribute("aria-disabled");
     expect(screen.queryByRole("button", { name: "Cancel" })).not.toBeInTheDocument();
     // After completion both Generate and Copy buttons exist — target Generate.
     expect(screen.getByRole("button", { name: "Generate Article" })).toBeEnabled();
@@ -271,7 +284,7 @@ describe("App", () => {
     typeUrl();
     clickGenerate();
 
-    await screen.findByRole("status");
+    await waitForGenerating();
     act(() => sendDelta("A confident-looking paragraph that is not a reflection of the sermon."));
     expect(await screen.findByLabelText("Generated article")).toHaveTextContent("confident-looking");
 
@@ -298,7 +311,8 @@ describe("App", () => {
     expect(await screen.findByLabelText("Generated article")).toHaveTextContent("partial");
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
-    await waitFor(() => expect(screen.queryByRole("status")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText(WATCHING)).not.toBeInTheDocument());
+    expect(status()).toHaveTextContent("Generation cancelled.");
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Generated article")).not.toBeInTheDocument();
     expect(trackEvent).toHaveBeenCalledWith("generate_cancel", expect.objectContaining({ provider: "gemini" }));
@@ -314,7 +328,7 @@ describe("Connect flow", () => {
 
     expect(screen.getByRole("dialog", { name: "Connect Gemini" })).toBeInTheDocument();
     expect(generateReflection).not.toHaveBeenCalled();
-    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.queryByText(WATCHING)).not.toBeInTheDocument();
     expect(trackEvent).toHaveBeenCalledWith("connect_open", { mode: "connect" });
   });
 
@@ -441,9 +455,9 @@ describe("Connect flow", () => {
     expect(trackEvent).toHaveBeenCalledWith("key_forgotten");
   });
 
-  it("an invalid_key failure mid-generation forgets the key and reopens the dialog with the message", async () => {
+  it("a DEFINITIVE invalid_key failure mid-generation forgets the key and reopens the dialog with the message", async () => {
     connectKey();
-    mockFailure("invalid_key", "That key didn't work. Check it in Google AI Studio and try again.", 400);
+    mockFailure("invalid_key", "That key didn't work. Check it in Google AI Studio and try again.", 400, { definitive: true });
     renderApp();
     typeUrl();
     clickGenerate();
@@ -460,6 +474,69 @@ describe("Connect flow", () => {
     fireEvent.click(within(dlg).getByRole("button", { name: "Test and connect" }));
     expect(await screen.findByLabelText("Generated article")).toHaveTextContent("Retried.");
     expect(generateReflection).toHaveBeenLastCalledWith(expect.objectContaining({ url: URL, key: KEY }));
+  });
+
+  it("a non-definitive invalid_key keeps the stored key and opens the manage dialog with the message", async () => {
+    connectKey();
+    mockFailure("invalid_key", "That key didn't work.", 403); // no `definitive`
+    renderApp();
+    typeUrl();
+    clickGenerate();
+
+    const dlg = await screen.findByRole("dialog", { name: "Manage your Gemini key" });
+    expect(within(dlg).getByRole("alert")).toHaveTextContent("That key didn't work.");
+    expect(getKey()).toBe(KEY);
+    expect(window.localStorage.getItem("sermon.gemini.key")).toBe(KEY);
+    expect(screen.getByRole("button", { name: /Gemini Flash connected/i })).toBeInTheDocument();
+  });
+
+  it("an unexplained 403 from the real classifier (access_denied) never touches the stored key", async () => {
+    connectKey();
+    const { classify } = await vi.importActual("./lib/gemini.js");
+    const err = classify(403, { error: { code: 403, status: "PERMISSION_DENIED", message: "x", details: [{ reason: "SOME_NEW_REASON" }] } });
+    expect(err.type).toBe("access_denied");
+    generateReflection.mockRejectedValue(err);
+    renderApp();
+    typeUrl();
+    clickGenerate();
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Your key is still saved");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(getKey()).toBe(KEY);
+  });
+
+  it("updates the chip when another tab forgets or adds the key", () => {
+    window.localStorage.setItem("sermon.gemini.key", KEY); // loaded from storage, not set in this tab
+    renderApp();
+    expect(screen.getByRole("button", { name: /connected/i })).toBeInTheDocument();
+    act(() => {
+      window.localStorage.removeItem("sermon.gemini.key");
+      window.dispatchEvent(new StorageEvent("storage", { key: "sermon.gemini.key", newValue: null }));
+    });
+    expect(screen.getByRole("button", { name: "Connect Gemini" })).toBeInTheDocument();
+    act(() => {
+      window.localStorage.setItem("sermon.gemini.key", KEY);
+      window.dispatchEvent(new StorageEvent("storage", { key: "sermon.gemini.key", newValue: KEY }));
+    });
+    expect(screen.getByRole("button", { name: /connected/i })).toBeInTheDocument();
+  });
+
+  it("puts focus on the URL field when a dialog that opened itself is dismissed", async () => {
+    connectKey();
+    mockFailure("invalid_key", "bad", 400, { definitive: true });
+    renderApp();
+    typeUrl();
+    clickGenerate();
+    await screen.findByRole("dialog");
+    document.body.focus();
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(document.activeElement).toBe(screen.getByLabelText("YouTube URL"));
+  });
+
+  it("has a persistent, initially empty status region so announcements are not missed", () => {
+    renderApp();
+    expect(status()).toHaveTextContent("");
   });
 
   it("the show/hide toggle reveals the key field", () => {
