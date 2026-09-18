@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Routes, Route, Link, NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Copy, Check, AlertCircle, Lock } from "lucide-react";
+import { Copy, Check, AlertCircle, Lock, History, RotateCcw, X } from "lucide-react";
 
 import { canonicalizeYouTubeUrl, generateReflection, MODEL } from "./lib/gemini.js";
 import { clearKey, getKey, setKey, subscribeToKeyChanges } from "./lib/keyStore.js";
 import { initAnalytics, trackEvent, trackPageView } from "./analytics.js";
 import { useHistory } from "./history/useHistory.js";
+import { readCollapsed, writeCollapsed } from "./history/collapsedPref.js";
+import { shortDate } from "./history/format.js";
+import HistorySidebar from "./history/HistorySidebar.jsx";
 import ConnectGeminiModal from "./ConnectGeminiModal.jsx";
 import ProviderChip from "./ProviderChip.jsx";
 import About from "./About.jsx";
@@ -50,6 +53,13 @@ export default function App() {
   const [announcement, setAnnouncement] = useState("");
   const [elapsedMs, setElapsedMs] = useState(0);
   const [retrying, setRetrying] = useState(false);
+  // Sidebar chrome. `openedFromHistory` tells the result bar whether what's on
+  // screen came from the list (chip + Regenerate) or was just generated (Saved).
+  const [collapsed, setCollapsed] = useState(readCollapsed);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [openedFromHistory, setOpenedFromHistory] = useState(false);
+  const [savedFlash, setSavedFlash] = useState(false);
+  const [unseenNew, setUnseenNew] = useState(false);
 
   const inFlight = useRef(false);
   const copyTimer = useRef(null);
@@ -59,6 +69,8 @@ export default function App() {
   const startedAtRef = useRef(0);
   const resultRef = useRef(null);
   const scrolledToResult = useRef(false);
+  const urlInputRef = useRef(null);
+  const historyPillRef = useRef(null);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -66,6 +78,8 @@ export default function App() {
   // the sidebar. Saving is best-effort: a failing store never blocks the result.
   const articleHistory = useHistory();
   const historyError = articleHistory.error;
+  const { active: activeEntry, clearError: clearHistoryError } = articleHistory;
+  const saveFailed = historyError?.op === "save";
 
   useEffect(() => {
     initAnalytics();
@@ -91,6 +105,29 @@ export default function App() {
   useEffect(() => {
     if (historyError) trackEvent("history_error", { op: historyError.op || "unknown", error_type: historyError.type || "unknown" });
   }, [historyError]);
+
+  // The save-failed toast and the "Saved" chip both time out on their own.
+  useEffect(() => {
+    if (!saveFailed) return undefined;
+    const id = setTimeout(clearHistoryError, 8000);
+    return () => clearTimeout(id);
+  }, [saveFailed, clearHistoryError]);
+
+  useEffect(() => {
+    if (!savedFlash) return undefined;
+    const id = setTimeout(() => setSavedFlash(false), 4000);
+    return () => clearTimeout(id);
+  }, [savedFlash]);
+
+  // Mobile drawer: Escape closes it.
+  useEffect(() => {
+    if (!drawerOpen) return undefined;
+    const onKey = (event) => {
+      if (event.key === "Escape") closeDrawer();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
   // Elapsed time while Gemini reads the video (the silent phase is 25 s to
   // several minutes). Visible only; the live region is not updated every second.
@@ -127,14 +164,19 @@ export default function App() {
 
   function handleSubmit(event) {
     event.preventDefault();
+    startGeneration(url);
+  }
+
+  /** Validate a pasted link, then generate — or ask for a key first. */
+  function startGeneration(rawUrl) {
     if (inFlight.current) return;
 
     // One definition of "a YouTube video link", shared with the client: a
     // playlist or channel page is refused here, before the key dialog opens,
     // and music./scheme-less/timestamped links are accepted and normalised.
-    const videoUrl = canonicalizeYouTubeUrl(url);
+    const videoUrl = canonicalizeYouTubeUrl(rawUrl);
     if (!videoUrl) {
-      trackEvent("invalid_url_attempt", { domain: extractDomain(url.trim()) });
+      trackEvent("invalid_url_attempt", { domain: extractDomain(String(rawUrl).trim()) });
       setError("Please enter a valid YouTube URL.");
       return;
     }
@@ -161,6 +203,8 @@ export default function App() {
     setCopied(false);
     // A new run is a new entry; the one open from the sidebar is no longer what's on screen.
     articleHistory.deselect();
+    setOpenedFromHistory(false);
+    setSavedFlash(false);
     setAnnouncement("Generating. Gemini is watching the sermon and writing the reflection.");
 
     // The video id is the one thing about the video we record, and the page
@@ -197,7 +241,11 @@ export default function App() {
       });
       // After the success event: a refused save must not look like a failed
       // generation. Resolves null on failure and reports via `error` (see above).
-      await articleHistory.save({ url: targetUrl, article: result, provider: PROVIDER, model: MODEL });
+      const saved = await articleHistory.save({ url: targetUrl, article: result, provider: PROVIDER, model: MODEL });
+      if (saved) {
+        setSavedFlash(true);
+        setUnseenNew(true);
+      }
     } catch (err) {
       setArticle("");
       setAnnouncement(err?.type === "cancelled" ? "Generation cancelled." : "");
@@ -231,6 +279,74 @@ export default function App() {
 
   function handleCancel() {
     abortRef.current?.abort();
+  }
+
+  // ── Sidebar ──────────────────────────────────────────────────────────────
+
+  function toggleCollapsed() {
+    setCollapsed((current) => {
+      writeCollapsed(!current);
+      return !current;
+    });
+  }
+
+  function openDrawer() {
+    setUnseenNew(false);
+    setDrawerOpen(true);
+  }
+
+  function closeDrawer() {
+    setDrawerOpen(false);
+    historyPillRef.current?.focus();
+  }
+
+  /** Show a saved article again: fill the input, render the text, mark it active. */
+  function handleSelectEntry(id) {
+    if (loading) return;
+    const entry = articleHistory.select(id);
+    if (!entry) return;
+    setUrl(entry.url);
+    setArticle(entry.article);
+    setError("");
+    setCopied(false);
+    setSavedFlash(false);
+    setOpenedFromHistory(true);
+    setDrawerOpen(false);
+    trackEvent("history_select", { video_id: entry.videoId });
+  }
+
+  /** Back to the empty form, ready for the next paste. */
+  function handleNewArticle() {
+    if (loading) return;
+    articleHistory.deselect();
+    setUrl("");
+    setArticle("");
+    setError("");
+    setCopied(false);
+    setOpenedFromHistory(false);
+    setDrawerOpen(false);
+    urlInputRef.current?.focus();
+  }
+
+  async function handleRemoveEntry(id) {
+    const wasOnScreen = openedFromHistory && articleHistory.activeId === id;
+    trackEvent("history_delete", {});
+    await articleHistory.remove(id);
+    if (wasOnScreen && !inFlight.current) {
+      setUrl("");
+      setArticle("");
+      setOpenedFromHistory(false);
+    }
+  }
+
+  async function handleClearHistory() {
+    trackEvent("history_clear", { count: articleHistory.entries.length });
+    await articleHistory.clear();
+    if (openedFromHistory && !inFlight.current) {
+      setUrl("");
+      setArticle("");
+      setOpenedFromHistory(false);
+    }
   }
 
   function handleConnected(key, { remember }) {
@@ -282,6 +398,24 @@ export default function App() {
           {BRAND}
         </Link>
         <div className="topbar__right">
+          {location.pathname === "/" && (
+            <button
+              type="button"
+              className="chip history-pill"
+              onClick={openDrawer}
+              aria-controls="history"
+              aria-expanded={drawerOpen}
+              ref={historyPillRef}
+            >
+              <History size={14} aria-hidden="true" />
+              <span className="chip__label">History</span>
+              {unseenNew ? (
+                <span className="history-pill__dot" aria-label="New article saved" />
+              ) : (
+                articleHistory.entries.length > 0 && <span className="history-pill__count">{articleHistory.entries.length}</span>
+              )}
+            </button>
+          )}
           <ProviderChip connected={hasKey} onClick={() => openModal(hasKey ? "manage" : "connect")} />
           <nav className="nav" aria-label="Primary">
             <NavLink
@@ -306,6 +440,23 @@ export default function App() {
         <Route path="/about" element={<About />} />
         <Route path="/contact" element={<Contact />} />
         <Route path="/" element={
+          <div className={`workspace ${collapsed ? "workspace--collapsed" : ""}`}>
+          <HistorySidebar
+            entries={articleHistory.entries}
+            status={articleHistory.status}
+            activeId={articleHistory.activeId}
+            busy={loading}
+            pendingUrl={loading ? url : ""}
+            collapsed={collapsed}
+            open={drawerOpen}
+            onSelect={handleSelectEntry}
+            onNew={handleNewArticle}
+            onRemove={handleRemoveEntry}
+            onClear={handleClearHistory}
+            onToggleCollapsed={toggleCollapsed}
+            onClose={closeDrawer}
+          />
+          {drawerOpen && <div className="history-scrim" onClick={closeDrawer} aria-hidden="true" />}
           <main className="hero" id="top">
           <div className="hero__inner">
             <div className="header">
@@ -343,6 +494,7 @@ export default function App() {
                   spellCheck="false"
                   aria-label="YouTube URL"
                   data-focus-fallback
+                  ref={urlInputRef}
                 />
               </div>
               <button
@@ -407,8 +559,32 @@ export default function App() {
                 <div className="result-bar">
                   <span className="result-meta">
                     {stats.words.toLocaleString()} words · {stats.minutes} min read
+                    {openedFromHistory && activeEntry && (
+                      <span className="result-chip">
+                        <History size={12} aria-hidden="true" />
+                        From history · {shortDate(activeEntry.createdAt)}
+                      </span>
+                    )}
+                    {savedFlash && (
+                      <span className="result-chip result-chip--ok">
+                        <Check size={12} aria-hidden="true" />
+                        Saved
+                      </span>
+                    )}
                   </span>
                   <div className="result-actions">
+                    {openedFromHistory && activeEntry && (
+                      <button
+                        type="button"
+                        className="action-btn icon-only"
+                        onClick={() => startGeneration(activeEntry.url)}
+                        disabled={loading}
+                        aria-label="Regenerate"
+                        title="Regenerate this article"
+                      >
+                        <RotateCcw size={16} />
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="action-btn icon-only"
@@ -432,9 +608,18 @@ export default function App() {
               </section>
             )}
 
-
+            {saveFailed && (
+              <div className="toast" role="status">
+                <AlertCircle size={15} aria-hidden="true" />
+                <span>Couldn&rsquo;t save to history. Copy the article now so you don&rsquo;t lose it.</span>
+                <button type="button" className="toast__close" onClick={clearHistoryError} aria-label="Dismiss">
+                  <X size={14} aria-hidden="true" />
+                </button>
+              </div>
+            )}
           </div>
           </main>
+          </div>
         } />
       </Routes>
 
