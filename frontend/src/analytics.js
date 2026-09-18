@@ -14,9 +14,16 @@
 // v2: generation runs in the browser on the user's own Gemini key —
 // generate_* events gain `provider` + `model` and keep `video_id`, which the
 // page discloses ("We log which video was summarized"); new connect_open /
-// connect_success / connect_error / key_forgotten / generate_cancel events.
-// Never put the key (or any part of it) in an event.
+// connect_success / connect_error / key_forgotten / generate_cancel /
+// generate_retry events. error_type values come from the client's error
+// types (see lib/gemini.js USER_MESSAGES). Never put the key (or any part of
+// it) in an event.
 const SCHEMA_VERSION = 2;
+
+// Only the production site reports. Preview deployments are built with the
+// same env, so an env check alone would send every reviewer's clicks to the
+// production property.
+const PRODUCTION_HOSTS = new Set(["sermon-summarizer.com", "www.sermon-summarizer.com", "youtube-sermon-summarizer.vercel.app"]);
 
 let initialized = false;
 
@@ -24,11 +31,13 @@ function measurementId() {
   return import.meta.env.VITE_GA_MEASUREMENT_ID || "";
 }
 
-// Enabled only in a production build with an ID configured. Gating on PROD (not
-// just the env var) guarantees the no-op in dev/tests even if someone sets
-// VITE_GA_MEASUREMENT_ID locally — so localhost traffic can't pollute analytics.
+// Enabled only in a production build, with an ID configured, served from the
+// production host. Gating on PROD (not just the env var) guarantees the no-op
+// in dev/tests even if someone sets VITE_GA_MEASUREMENT_ID locally; gating on
+// the host keeps preview deployments out of the production property.
 export function isAnalyticsEnabled() {
-  return Boolean(measurementId()) && Boolean(import.meta.env.PROD);
+  const hostname = typeof window === "undefined" ? "" : window.location.hostname;
+  return Boolean(measurementId()) && Boolean(import.meta.env.PROD) && PRODUCTION_HOSTS.has(hostname);
 }
 
 /**

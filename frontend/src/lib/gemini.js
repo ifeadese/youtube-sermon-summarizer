@@ -63,7 +63,7 @@ const USER_MESSAGES = {
   region:
     "Google's free Gemini tier isn't available for this key's region or project. Enabling billing in Google AI Studio usually fixes it.",
   quota:
-    "You've used up today's free requests on this key. Try again tomorrow, or add billing in Google AI Studio.",
+    "You've hit the free tier's limit on this key. If it still fails after a minute, that's today's allowance: try again tomorrow, or add billing in Google AI Studio.",
   rate_limited:
     "Gemini is rate-limiting this key right now. Wait a minute and try again. Very long videos can exceed the free tier's per-minute limit.",
   private_video:
@@ -226,6 +226,11 @@ export function classify(status, body) {
   }
 
   const code = typeof err.code === "string" ? err.code.toLowerCase() : "";
+  // Google's daily and per-minute limits can both arrive as `quota_exceeded`;
+  // the metric name in the message is the only thing that tells them apart.
+  // This is the one place message text is consulted, and only to pick between
+  // two 429 messages: when in doubt it stays `quota`, whose wording covers both.
+  if (code === "quota_exceeded" && /minute|token/i.test(String(err.message || ""))) return geminiError("rate_limited", opts);
   // `authentication` is documented as "The API key is missing, invalid, or expired."
   if (code && CODE_TYPES[code]) return geminiError(CODE_TYPES[code], { ...opts, definitive: code === "authentication" });
 

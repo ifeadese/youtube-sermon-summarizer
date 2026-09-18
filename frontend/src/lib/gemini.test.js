@@ -320,6 +320,15 @@ describe("classify", () => {
     expect(classify(400, envelope(400, "FAILED_PRECONDITION", "User location is not supported for the API use.")).type).toBe("region");
   });
 
+  it("tells a per-minute 429 (token or per-minute metric in the message) from the daily allowance", () => {
+    const perMinute = { error: { code: "quota_exceeded", message: "Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 250000, model: gemini-3.8-flash\nPlease retry in 12s." } };
+    expect(classify(429, perMinute).type).toBe("rate_limited");
+    expect(classify(429, { error: { code: "quota_exceeded", message: "…requests per minute…" } }).type).toBe("rate_limited");
+    // WIRE: the daily one names only the request metric.
+    expect(classify(429, quotaWire).type).toBe("quota");
+    expect(classify(429, quotaWire).message).toMatch(/after a minute/);
+  });
+
   it("falls back on the bare status: 429 → quota, 5xx → server, anything else → bad_response", () => {
     expect(classify(429, null).type).toBe("quota");
     expect(classify(429, envelope(429, "RESOURCE_EXHAUSTED", "Quota exceeded")).type).toBe("quota");

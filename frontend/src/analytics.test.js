@@ -1,3 +1,5 @@
+// @vitest-environment jsdom
+// @vitest-environment-options { "url": "https://sermon-summarizer.com/" }
 import {
   isAnalyticsEnabled,
   initAnalytics,
