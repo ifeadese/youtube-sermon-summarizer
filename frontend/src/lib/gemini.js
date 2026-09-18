@@ -19,6 +19,7 @@
  */
 
 import { NO_SERMON_SENTINEL, SYSTEM_PROMPT, USER_PROMPT } from "../prompt.js";
+import { countWords } from "./text.js";
 
 export const MODEL = "gemini-3.8-flash";
 export const MODEL_LABEL = "Gemini Flash";
@@ -354,11 +355,6 @@ export function buildRequestBody(url) {
     store: false,
     stream: true,
   };
-}
-
-function countWords(text) {
-  const trimmed = text.trim();
-  return trimmed ? trimmed.split(/\s+/).length : 0;
 }
 
 /** Decide whether a finished stream is a real reflection. Returns the text or throws. */

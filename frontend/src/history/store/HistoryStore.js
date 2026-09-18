@@ -12,8 +12,9 @@
  *    never sort.
  *  - `save()` upserts by id and enforces the adapter's cap by dropping the
  *    oldest entries. It rejects with an Error whose `type` is "quota" when the
- *    entry cannot be stored even after eviction, and "unavailable" when the
- *    backing store cannot be used at all.
+ *    entry cannot be stored even after eviction, "unavailable" when the
+ *    backing store cannot be used at all, and "incompatible" when the stored
+ *    data belongs to another schema version and must not be overwritten.
  *  - `subscribe()` is optional. When present it calls the listener after the
  *    data changed *outside* this store instance (another tab, another
  *    device); the caller re-lists. It returns an unsubscribe function.
@@ -22,7 +23,6 @@
  *
  * @typedef {object} HistoryStore
  * @property {() => Promise<import("../entry.js").HistoryEntry[]>} list
- * @property {(id: string) => Promise<import("../entry.js").HistoryEntry|null>} get
  * @property {(entry: import("../entry.js").HistoryEntry) => Promise<import("../entry.js").HistoryEntry>} save
  * @property {(id: string) => Promise<void>} remove
  * @property {() => Promise<void>} clear
@@ -30,7 +30,7 @@
  * @property {() => boolean} [isAvailable]
  */
 
-const REQUIRED = ["list", "get", "save", "remove", "clear"];
+const REQUIRED = ["list", "save", "remove", "clear"];
 
 /** Build an Error carrying a stable `type` for the hook to branch on. */
 export function historyError(type, message, cause) {

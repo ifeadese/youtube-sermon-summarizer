@@ -7,9 +7,8 @@
  * needs to change.
  */
 
-import { assertHistoryStore } from "./store/HistoryStore.js";
 import { createLocalStorageStore } from "./store/localStorageStore.js";
 
 export function createHistoryStore() {
-  return assertHistoryStore(createLocalStorageStore());
+  return createLocalStorageStore();
 }

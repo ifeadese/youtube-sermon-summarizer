@@ -5,8 +5,11 @@
  * shape, and `isEntry` is the single gate an adapter uses to accept a record
  * it reads back (from localStorage today, from a server or an import file
  * later). Bump SCHEMA_VERSION on any breaking change to the shape and teach
- * `isEntry`/the adapter how to migrate the old one.
+ * `isEntry`/the adapter how to migrate the old one; until it can, an adapter
+ * leaves another version's data alone rather than writing over it.
  */
+
+import { countWords } from "../lib/text.js";
 
 export const SCHEMA_VERSION = 1;
 
@@ -29,11 +32,6 @@ const FALLBACK_TITLE = "Untitled reflection";
  * @property {string} model         e.g. "gemini-3.8-flash"
  * @property {string} createdAt     ISO-8601 timestamp.
  */
-
-export function countWords(text) {
-  const trimmed = String(text || "").trim();
-  return trimmed ? trimmed.split(/\s+/).length : 0;
-}
 
 /** The article's first non-empty line, trimmed and capped. */
 export function titleFromArticle(article) {

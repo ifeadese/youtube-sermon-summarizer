@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { MAX_ENTRIES, SCHEMA_VERSION, byNewest, countWords, createEntry, isEntry, titleFromArticle, videoIdFromUrl } from "./entry.js";
+import { countWords } from "../lib/text.js";
+import { MAX_ENTRIES, SCHEMA_VERSION, byNewest, createEntry, isEntry, titleFromArticle, videoIdFromUrl } from "./entry.js";
 
 const ARTICLE = "The Quiet Work of Waiting on God\n\nPsalm 27:13-14\n\nThere is a kind of waiting that feels like nothing is happening.";
 const URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";

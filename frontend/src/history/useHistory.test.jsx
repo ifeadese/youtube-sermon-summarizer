@@ -45,7 +45,31 @@ describe("useHistory", () => {
     expect(result.current.entries.map((e) => e.id)).toEqual([saved.id, "older"]);
     expect(result.current.activeId).toBe(saved.id);
     expect(result.current.active.article).toBe(INPUT.article);
-    expect(await store.get(saved.id)).toEqual(saved);
+    expect((await store.list())[0]).toEqual(saved);
+  });
+
+  it("a save that lands after the user picked another entry does not steal the selection", async () => {
+    const store = createMemoryStore({ initial: [makeEntry({ id: "a", minutesAgo: 5 })] });
+    const realSave = store.save;
+    let release;
+    store.save = (entry) => new Promise((resolve) => {
+      release = () => resolve(realSave(entry));
+    });
+    const { result } = setup(store);
+    await waitFor(() => expect(result.current.status).toBe("ready"));
+    let pending;
+    act(() => {
+      pending = result.current.save(INPUT);
+    });
+    act(() => {
+      result.current.select("a");
+    });
+    await act(async () => {
+      release();
+      await pending;
+    });
+    expect(result.current.entries).toHaveLength(2);
+    expect(result.current.activeId).toBe("a");
   });
 
   it("select and deselect change the active entry", async () => {

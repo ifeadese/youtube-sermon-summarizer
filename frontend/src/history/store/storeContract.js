@@ -26,7 +26,6 @@ export function runHistoryStoreContract(name, factory) {
     it("starts empty", async () => {
       const store = factory();
       expect(await store.list()).toEqual([]);
-      expect(await store.get("nope")).toBeNull();
     });
 
     it("save returns the entry and list is newest first regardless of insertion order", async () => {
@@ -38,13 +37,6 @@ export function runHistoryStoreContract(name, factory) {
       await store.save(fresh);
       await store.save(old);
       expect((await store.list()).map((e) => e.id)).toEqual(["fresh", "mid", "old"]);
-    });
-
-    it("get finds by id", async () => {
-      const store = factory();
-      const entry = makeEntry({ id: "one" });
-      await store.save(entry);
-      expect(await store.get("one")).toEqual(entry);
     });
 
     it("save upserts by id", async () => {
@@ -85,7 +77,7 @@ export function runHistoryStoreContract(name, factory) {
       await store.save(makeEntry({ id: "a" }));
       const [first] = await store.list();
       first.title = "mutated";
-      expect((await store.get("a")).title).not.toBe("mutated");
+      expect((await store.list())[0].title).not.toBe("mutated");
     });
   });
 }

@@ -56,6 +56,15 @@ describe("localStorageStore specifics", () => {
     expect(await createLocalStorageStore().list()).toEqual([]);
   });
 
+  it("refuses to overwrite an envelope written by a different schema version", async () => {
+    const foreign = JSON.stringify({ version: SCHEMA_VERSION + 1, entries: [makeEntry({ id: "theirs" })] });
+    window.localStorage.setItem(STORAGE_KEY, foreign);
+    const store = createLocalStorageStore();
+    await expect(store.save(makeEntry({ id: "mine" }))).rejects.toMatchObject({ type: "incompatible" });
+    await store.remove("theirs");
+    expect(window.localStorage.getItem(STORAGE_KEY)).toBe(foreign);
+  });
+
   it("drops malformed entries and keeps valid ones", async () => {
     const good = makeEntry({ id: "good" });
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: SCHEMA_VERSION, entries: [{ id: "bad" }, good, null] }));
@@ -74,6 +83,33 @@ describe("localStorageStore specifics", () => {
       throw new Error("blocked");
     });
     expect(createLocalStorageStore().isAvailable()).toBe(false);
+  });
+
+  it("stays available when the probe fails only because storage is full", async () => {
+    const storage = fakeStorage(0);
+    storage.length = 3; // other keys already fill the origin's quota
+    const store = createLocalStorageStore({ storage });
+    expect(store.isAvailable()).toBe(true);
+    await expect(store.save(makeEntry({ id: "a" }))).rejects.toMatchObject({ type: "quota" });
+  });
+
+  it("is unavailable when an empty storage refuses even the probe (zero quota)", () => {
+    const storage = fakeStorage(0);
+    storage.length = 0;
+    expect(createLocalStorageStore({ storage }).isAvailable()).toBe(false);
+  });
+
+  it("rejects with type 'unavailable', evicting nothing, when a write fails for a reason other than space", async () => {
+    const storage = fakeStorage();
+    const store = createLocalStorageStore({ storage });
+    await store.save(makeEntry({ id: "b", minutesAgo: 10 }));
+    const setItem = storage.setItem;
+    storage.setItem = (k, v) => {
+      if (k === STORAGE_KEY) throw new Error("The operation is insecure.");
+      setItem(k, v);
+    };
+    await expect(store.save(makeEntry({ id: "a" }))).rejects.toMatchObject({ type: "unavailable" });
+    expect((await store.list()).map((e) => e.id)).toEqual(["b"]);
   });
 
   it("evicts the oldest entries when the browser refuses for space, keeping the new one", async () => {

@@ -14,10 +14,6 @@ export function createMemoryStore({ maxEntries = MAX_ENTRIES, initial = [] } = {
     async list() {
       return entries.map((e) => ({ ...e }));
     },
-    async get(id) {
-      const found = entries.find((e) => e.id === id);
-      return found ? { ...found } : null;
-    },
     async save(entry) {
       entries = [{ ...entry }, ...entries.filter((e) => e.id !== entry.id)].sort(byNewest).slice(0, maxEntries);
       return { ...entry };

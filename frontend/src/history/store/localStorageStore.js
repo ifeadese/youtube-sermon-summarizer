@@ -6,6 +6,10 @@
  * the UI: reads degrade to an empty list, writes reject with a typed error
  * the hook can surface. Follows the same conventions as lib/keyStore.js.
  *
+ * An envelope written by a different SCHEMA_VERSION (a newer deploy in another
+ * tab) reads as empty but is never overwritten: writes reject with type
+ * "incompatible" until this tab reloads or the adapter learns to migrate it.
+ *
  * Cross-tab: the browser fires `storage` in OTHER tabs when this key changes,
  * which is exactly the "changed outside this instance" signal the contract's
  * `subscribe` promises.
@@ -25,6 +29,11 @@ function defaultStorage() {
   }
 }
 
+/** Browsers disagree on the name; the legacy codes cover old Safari and Firefox. */
+function isQuotaError(err) {
+  return err?.name === "QuotaExceededError" || err?.name === "NS_ERROR_DOM_QUOTA_REACHED" || err?.code === 22 || err?.code === 1014;
+}
+
 export function createLocalStorageStore({ key = STORAGE_KEY, maxEntries = MAX_ENTRIES, storage } = {}) {
   const getStorage = () => (storage === undefined ? defaultStorage() : storage);
   let available = null; // lazily probed once
@@ -38,64 +47,69 @@ export function createLocalStorageStore({ key = STORAGE_KEY, maxEntries = MAX_EN
       const ok = s.getItem(PROBE_KEY) === "1";
       s.removeItem(PROBE_KEY);
       available = ok;
-    } catch {
-      available = false;
+    } catch (err) {
+      // A full origin still reads and deletes fine, so history stays on and the
+      // save reports "quota". Full while empty means a zero quota: blocked.
+      available = isQuotaError(err) && getStorage().length > 0;
     }
     return available;
   }
 
+  /**
+   * The stored entries, plus `foreign` when the key holds another schema
+   * version's envelope: that reads as empty and must not be written over.
+   */
   function read() {
     try {
       const raw = getStorage()?.getItem(key);
-      if (!raw) return [];
+      if (!raw) return { entries: [], foreign: false };
       const parsed = JSON.parse(raw);
-      if (!parsed || parsed.version !== SCHEMA_VERSION || !Array.isArray(parsed.entries)) return [];
-      return parsed.entries.filter(isEntry).sort(byNewest);
+      if (typeof parsed?.version === "number" && parsed.version !== SCHEMA_VERSION) return { entries: [], foreign: true };
+      if (!Array.isArray(parsed?.entries)) return { entries: [], foreign: false };
+      return { entries: parsed.entries.filter(isEntry).sort(byNewest), foreign: false };
     } catch {
       // Corrupt JSON or a throwing storage API: nothing usable, show nothing.
-      return [];
+      return { entries: [], foreign: false };
     }
-  }
-
-  function writeOnce(entries) {
-    getStorage().setItem(key, JSON.stringify({ version: SCHEMA_VERSION, entries }));
   }
 
   /**
    * Write, evicting the oldest entries one at a time if the browser refuses
    * for lack of space. Gives up (typed "quota") only when even a single entry
-   * cannot be stored.
+   * cannot be stored. Entries are serialised once; each retry only re-joins.
    */
   function write(entries) {
     if (!isAvailable()) throw historyError("unavailable", "History storage is not available in this browser.");
-    let remaining = entries;
-    for (;;) {
+    const parts = entries.map((e) => JSON.stringify(e));
+    for (let keep = parts.length; ; keep -= 1) {
       try {
-        writeOnce(remaining);
-        return remaining;
+        getStorage().setItem(key, `{"version":${SCHEMA_VERSION},"entries":[${parts.slice(0, keep).join(",")}]}`);
+        return;
       } catch (err) {
-        if (remaining.length <= 1) {
-          throw historyError("quota", "Couldn't save to history: the browser is out of storage space.", err);
-        }
-        remaining = remaining.slice(0, -1);
+        if (!isQuotaError(err)) throw historyError("unavailable", "Couldn't save to history: the browser refused the write.", err);
+        if (keep <= 1) throw historyError("quota", "Couldn't save to history: the browser is out of storage space.", err);
       }
     }
   }
 
+  /** `read()` for a writer: rejects rather than let the caller replace a foreign envelope. */
+  function readForWrite() {
+    const { entries, foreign } = read();
+    if (foreign) throw historyError("incompatible", "History was written by a newer version of this page. Reload to keep saving.");
+    return entries;
+  }
+
   return {
     async list() {
-      return read();
-    },
-    async get(id) {
-      return read().find((e) => e.id === id) || null;
+      return read().entries;
     },
     async save(entry) {
-      const next = [entry, ...read().filter((e) => e.id !== entry.id)].sort(byNewest).slice(0, maxEntries);
+      const next = [entry, ...readForWrite().filter((e) => e.id !== entry.id)].sort(byNewest).slice(0, maxEntries);
       write(next);
       return entry;
     },
     async remove(id) {
-      const current = read();
+      const current = read().entries;
       const next = current.filter((e) => e.id !== id);
       if (next.length !== current.length) write(next);
     },

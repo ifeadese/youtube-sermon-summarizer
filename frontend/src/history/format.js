@@ -3,6 +3,8 @@
  * and day grouping. All take `now` so tests are deterministic.
  */
 
+import { videoIdFromUrl } from "./entry.js";
+
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
@@ -33,6 +35,13 @@ function startOfDay(date) {
   return d.getTime();
 }
 
+/** Local midnight `days` before the midnight `start`. Calendar maths: a DST day is not 24 h. */
+function daysBefore(start, days) {
+  const d = new Date(start);
+  d.setDate(d.getDate() - days);
+  return d.getTime();
+}
+
 /**
  * Bucket entries (already newest first) into the sidebar's day groups. Only
  * groups with entries are returned, in display order.
@@ -40,8 +49,8 @@ function startOfDay(date) {
  */
 export function groupByDay(entries, now = new Date()) {
   const today = startOfDay(now);
-  const yesterday = today - DAY;
-  const weekAgo = today - 6 * DAY;
+  const yesterday = daysBefore(today, 1);
+  const weekAgo = daysBefore(today, 6);
   const buckets = { Today: [], Yesterday: [], "Previous 7 days": [], Older: [] };
   for (const entry of entries) {
     const day = startOfDay(new Date(entry.createdAt));
@@ -58,10 +67,10 @@ export function groupByDay(entries, now = new Date()) {
 
 /** "youtu.be/<id>" for the pending row, or the host when there's no id. */
 export function shortVideoRef(url) {
+  const id = videoIdFromUrl(url);
+  if (id) return `youtu.be/${id}`;
   try {
-    const parsed = new URL(url);
-    const id = parsed.searchParams.get("v");
-    return id ? `youtu.be/${id}` : parsed.hostname.replace(/^www\./, "");
+    return new URL(url).hostname.replace(/^www\./, "");
   } catch {
     return "";
   }

@@ -9,6 +9,6 @@ import { assertHistoryStore } from "./store/HistoryStore.js";
  * one (tests use the memory store); otherwise the app's default is built once.
  */
 export default function HistoryProvider({ store, children }) {
-  const [value] = useState(() => (store ? assertHistoryStore(store) : createHistoryStore()));
+  const [value] = useState(() => assertHistoryStore(store || createHistoryStore()));
   return <HistoryStoreContext.Provider value={value}>{children}</HistoryStoreContext.Provider>;
 }

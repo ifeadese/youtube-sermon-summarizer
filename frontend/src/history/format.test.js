@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { groupByDay, relativeTime, shortDate, shortVideoRef } from "./format.js";
 
@@ -56,6 +56,19 @@ describe("groupByDay", () => {
   });
   it("returns nothing for no entries", () => {
     expect(groupByDay([], NOW)).toEqual([]);
+  });
+  it("keeps yesterday as Yesterday on the 25-hour day after clocks fall back", () => {
+    vi.stubEnv("TZ", "America/Toronto"); // DST ended Sun Nov 1 2026, 02:00
+    try {
+      const now = new Date(2026, 10, 2, 12, 0);
+      const groups = groupByDay([e("sun", new Date(2026, 10, 1, 10, 0).toISOString()), e("tue", new Date(2026, 9, 27, 10, 0).toISOString())], now);
+      expect(groups.map((g) => [g.label, g.entries.map((x) => x.id)])).toEqual([
+        ["Yesterday", ["sun"]],
+        ["Previous 7 days", ["tue"]],
+      ]);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 });
 

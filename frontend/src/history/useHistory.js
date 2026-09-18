@@ -31,6 +31,9 @@ export function useHistory() {
   // "clear") so the UI can react to a failed save differently from the rest.
   const [error, setError] = useState(null);
   const mounted = useRef(true);
+  // Bumped whenever the user picks or drops an entry, so a save that lands
+  // late (a slow store) can tell the selection moved on and leave it alone.
+  const selection = useRef(0);
 
   const fail = useCallback((op, err) => {
     if (mounted.current) setError(Object.assign(err, { op }));
@@ -72,12 +75,14 @@ export function useHistory() {
   }, [store, refresh, fail]);
 
   /**
-   * Save a finished generation. Resolves to the saved entry (now active) or
-   * null if the store refused; never throws.
+   * Save a finished generation. Resolves to the saved entry (now active,
+   * unless the user picked something else meanwhile) or null if the store
+   * refused; never throws.
    */
   const save = useCallback(
     async (input) => {
       if (status === "unavailable") return null;
+      const selectionAtStart = selection.current;
       let entry;
       try {
         entry = createEntry(input);
@@ -89,7 +94,7 @@ export function useHistory() {
         await store.save(entry);
         setError(null);
         await refresh();
-        if (mounted.current) setActiveId(entry.id);
+        if (mounted.current && selection.current === selectionAtStart) setActiveId(entry.id);
         return entry;
       } catch (err) {
         fail("save", err);
@@ -103,13 +108,17 @@ export function useHistory() {
   const select = useCallback(
     (id) => {
       const entry = entries.find((e) => e.id === id) || null;
+      selection.current += 1;
       setActiveId(entry ? entry.id : null);
       return entry;
     },
     [entries],
   );
 
-  const deselect = useCallback(() => setActiveId(null), []);
+  const deselect = useCallback(() => {
+    selection.current += 1;
+    setActiveId(null);
+  }, []);
 
   const remove = useCallback(
     async (id) => {
@@ -152,6 +161,5 @@ export function useHistory() {
     remove,
     clear,
     clearError,
-    refresh,
   };
 }
