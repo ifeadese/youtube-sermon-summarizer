@@ -158,9 +158,9 @@ Everything is under `frontend/src/history/`. The layering is deliberate so the s
 
 ### The contract (`HistoryStore`)
 
-- `list()`, `get(id)`, `save(entry)`, `remove(id)`, `clear()` — **all async**, even when the backing store is synchronous, so a server-backed adapter needs no changes upstream.
+- `list()`, `save(entry)`, `remove(id)`, `clear()` — **all async**, even when the backing store is synchronous, so a server-backed adapter needs no changes upstream.
 - `list()` resolves newest first. Callers never sort.
-- `save()` upserts by id and enforces the cap (`MAX_ENTRIES`, 50) by dropping the oldest. It rejects with an `Error` whose `type` is `"quota"` (cannot store even after eviction) or `"unavailable"` (the store cannot be used at all).
+- `save()` upserts by id and enforces the cap (`MAX_ENTRIES`, 50) by dropping the oldest. It rejects with an `Error` whose `type` is `"quota"` (cannot store even after eviction), `"unavailable"` (the store cannot be used at all) or `"incompatible"` (the stored data belongs to another schema version and is left untouched).
 - `subscribe(listener)` — optional. Fires when the data changed *outside* this instance (another tab, another device). Returns an unsubscribe function.
 - `isAvailable()` — optional, synchronous. `false` makes the sidebar show "History is off"; generation keeps working and saves are skipped.
 
@@ -168,8 +168,8 @@ Saving is best-effort everywhere: the hook's `save` resolves to the entry or `nu
 
 ### Storage today: localStorage (interim)
 
-- Key `sermon.history`, a versioned envelope `{ version, entries }`. Corrupt or foreign data reads as empty; records failing `isEntry` are dropped.
-- Cap of 50 entries, ~5 KB each, so ~250 KB against a ~5 MB per-origin budget. On a quota error the oldest entries are evicted one at a time before giving up.
+- Key `sermon.history`, a versioned envelope `{ version, entries }`. Corrupt data reads as empty; records failing `isEntry` are dropped. An envelope from a different schema version (a newer deploy open in another tab) also reads as empty but is never overwritten: saves reject as `"incompatible"` until the tab reloads.
+- Cap of 50 entries, ~5 KB each, so ~250 KB against a ~5 MB per-origin budget. On a quota error (and only a quota error) the oldest entries are evicted one at a time before giving up. A full origin still counts as available, so existing entries can be opened and deleted; only an empty storage that refuses writes reads as "History is off".
 - Cross-tab sync is free via the `storage` event.
 - Chosen over IndexedDB for the pilot: the data is tiny, it matches the key store's conventions, jsdom ships it (no fake IndexedDB in tests), and cross-tab sync needs no extra plumbing. IndexedDB earns its place only if the cap is lifted or transcripts are stored.
 - Like every browser store it does not survive the user clearing site data, and it does not follow the user across devices. That is the known limitation of this phase.
