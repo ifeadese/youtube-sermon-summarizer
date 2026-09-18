@@ -2,6 +2,16 @@
 
 Product thinking doc • June 2026
 
+> **Architecture change (September 2026).** The app no longer has a backend.
+> Each visitor connects their own free Gemini key, and the browser sends the
+> YouTube URL straight to the Gemini API, which watches the video itself — so
+> there is no transcript step, no proxy, no Railway, and no per-article cost to
+> the maintainer. The FastAPI backend, the Anthropic integration and the
+> transcript pipeline described in Milestones 1, 2 and 4 below were built and
+> shipped, then retired. They remain here as the record of how the product was
+> reasoned about. For the current design see the root `README.md`,
+> `frontend/README.md` and `docs/PROMPT_LOG.md` (v2.0).
+
 ---
 
 ## Table of Contents
@@ -68,6 +78,14 @@ One simple web app that collapses the entire pipeline into a single flow:
 No login system. No database. No fluff. Just the pipeline — in one screen.
 
 ## Tech Stack
+
+*Current (September 2026):*
+
+- **Frontend:** React + Vite, single page, static site on Vercel
+- **AI:** Gemini API, called from the browser with the visitor's own key; the YouTube URL is passed as a video input
+- **Backend / hosting / transcript:** none
+
+*Original MVP (June 2026, retired):*
 
 - **Frontend:** React (single page, minimal UI)
 - **Backend:** Python + FastAPI (one or two endpoints)
@@ -495,6 +513,13 @@ Since late 2024, YouTube blocks transcript requests from most datacenter IPs (AW
 ---
 
 ### Cost Estimate
+
+> **September 2026:** with bring-your-own-key the maintainer's running cost is
+> **$0** (static hosting on Vercel's free tier). Each visitor's Gemini free tier
+> covers ~8 hours of YouTube video per day; a 30-minute sermon is ~75k input
+> tokens at low media resolution, which on the paid tier would be a few cents.
+> The figures below are the original Claude + Railway estimate, kept for the
+> record.
 
 **Important:** you need the **Claude developer API** (pay-as-you-go, prepaid credits via console.anthropic.com), **not** a Claude.ai Pro/Max subscription — a chat subscription does not power your app. There is no monthly "plan" to pick; you load credits and draw them down per token used.
 
