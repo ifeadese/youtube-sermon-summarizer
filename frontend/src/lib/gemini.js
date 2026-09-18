@@ -23,10 +23,11 @@ import { NO_SERMON_SENTINEL, SYSTEM_PROMPT, USER_PROMPT } from "../prompt.js";
 export const MODEL = "gemini-3.8-flash";
 export const MODEL_LABEL = "Gemini Flash";
 export const API_BASE = "https://generativelanguage.googleapis.com";
-// A GA `/v1/interactions` route exists, but YouTube video input on it is not yet
-// verified; keep the version in one place so the switch is a one-line change.
+// Stay on v1beta: a GA `/v1/interactions` route exists but rejects video input
+// outright (verified live 2026-09-18: "'video' is not supported for 'type'").
 export const API_VERSION = "v1beta";
 export const AI_STUDIO_KEY_URL = "https://aistudio.google.com/apikey";
+export const GEMINI_TERMS_URL = "https://ai.google.dev/gemini-api/terms";
 
 // Safety net for the whole request. The model ingests the entire video before
 // writing a word (measured: 25–245 s of silence), so this is not a UX budget —
@@ -53,6 +54,8 @@ const RETRY_DELAY_RANGE_MS = [2000, 4000];
 
 const USER_MESSAGES = {
   invalid_key: "That key didn't work. Check it in Google AI Studio and try again.",
+  access_denied:
+    "Google refused this request for your key's project. Your key is still saved. Check the project in Google AI Studio, then try again.",
   key_restricted:
     "This key is restricted and can't be used from this site. In Google Cloud, remove the key's website or API restrictions, or create a new key in Google AI Studio.",
   api_disabled:
@@ -60,7 +63,7 @@ const USER_MESSAGES = {
   region:
     "Google's free Gemini tier isn't available for this key's region or project. Enabling billing in Google AI Studio usually fixes it.",
   quota:
-    "You've used up today's free requests on this key. Try again tomorrow, or add billing in Google AI Studio.",
+    "You've hit the free tier's limit on this key. If it still fails after a minute, that's today's allowance: try again tomorrow, or add billing in Google AI Studio.",
   rate_limited:
     "Gemini is rate-limiting this key right now. Wait a minute and try again. Very long videos can exceed the free tier's per-minute limit.",
   private_video:
@@ -75,7 +78,7 @@ const USER_MESSAGES = {
   interrupted: "The connection dropped before Gemini finished. Please try again.",
   model_unavailable: "This Gemini model is no longer available. The site needs an update — please let us know.",
   network: "Could not reach Gemini. Please check your connection and try again.",
-  timeout: "This took too long and was cancelled. Please try again.",
+  timeout: "This took too long, so we stopped waiting. Please try again.",
   cancelled: "Generation cancelled.",
   server: "Gemini is having trouble right now. Please try again in a minute.",
   bad_response: "Gemini returned an unexpected response. Please try again.",
@@ -87,12 +90,15 @@ const USER_MESSAGES = {
  * can show a friendly message and report a useful error_type to analytics.
  * `body` is the parsed Google error payload when there was one (never the key).
  */
-export function geminiError(type, { cause, status, body } = {}) {
+export function geminiError(type, { cause, status, body, definitive } = {}) {
   const text = USER_MESSAGES[type] || USER_MESSAGES.bad_response;
   const error = cause ? new Error(text, { cause }) : new Error(text);
   error.type = type;
   if (status) error.status = status;
   if (body) error.body = body;
+  // Set only when Google has said, in so many words, that this key is dead.
+  // The UI forgets a stored key on nothing less.
+  if (definitive) error.definitive = true;
   return error;
 }
 
@@ -133,17 +139,34 @@ export function canonicalizeYouTubeUrl(input) {
 }
 
 /**
- * Trim a pasted key and reject one that can't travel in an HTTP header. A
+ * What people actually paste: the key, the key in quotes, or a whole `.env`
+ * line (`GEMINI_API_KEY=AIza…`, `export GOOGLE_API_KEY="AIza…"`). Reduce all of
+ * them to the bare key. Never rejects: Google has more than one key format.
+ */
+export function cleanPastedKey(input) {
+  let value = String(input ?? "").trim();
+  value = value.replace(/^(?:export\s+)?[A-Za-z_][A-Za-z0-9_]*\s*=\s*/, "");
+  value = value.replace(/^(["'`])(.*)\1$/, "$2");
+  return value.trim();
+}
+
+/**
+ * Clean a pasted key and reject one that can't travel in an HTTP header. A
  * zero-width space from a rich-text paste makes `fetch` throw a TypeError,
  * which would otherwise surface as "check your connection".
  */
 function normalizeKey(key) {
-  const value = String(key ?? "").trim();
+  const value = cleanPastedKey(key);
   if (!value || !/^[\x21-\x7e]+$/.test(value)) throw geminiError("invalid_key");
   return value;
 }
 
 // ── Error classification ────────────────────────────────────────────────────
+
+// The only signals that mean "this key is dead": everything else leaves a
+// stored key alone. Google adds PERMISSION_DENIED reasons over time, and wiping
+// a working remembered key on one we don't recognise is not recoverable.
+const DEAD_KEY_REASONS = new Set(["API_KEY_INVALID", "API_KEY_EXPIRED"]);
 
 // Google's API-key layer: standard envelope with `details[].reason`.
 const REASON_TYPES = {
@@ -198,15 +221,24 @@ export function classify(status, body) {
   const opts = { status, body };
 
   const reason = Array.isArray(err.details) ? err.details.find((d) => d?.reason)?.reason : undefined;
-  if (reason && REASON_TYPES[reason]) return geminiError(REASON_TYPES[reason], opts);
+  if (reason && REASON_TYPES[reason]) {
+    return geminiError(REASON_TYPES[reason], { ...opts, definitive: DEAD_KEY_REASONS.has(reason) });
+  }
 
   const code = typeof err.code === "string" ? err.code.toLowerCase() : "";
-  if (code && CODE_TYPES[code]) return geminiError(CODE_TYPES[code], opts);
+  // Google's daily and per-minute limits can both arrive as `quota_exceeded`;
+  // the metric name in the message is the only thing that tells them apart.
+  // This is the one place message text is consulted, and only to pick between
+  // two 429 messages: when in doubt it stays `quota`, whose wording covers both.
+  if (code === "quota_exceeded" && /minute|token/i.test(String(err.message || ""))) return geminiError("rate_limited", opts);
+  // `authentication` is documented as "The API key is missing, invalid, or expired."
+  if (code && CODE_TYPES[code]) return geminiError(CODE_TYPES[code], { ...opts, definitive: code === "authentication" });
 
   if (err.status === "FAILED_PRECONDITION") return geminiError("region", opts);
   if (err.status === "RESOURCE_EXHAUSTED" || status === 429) return geminiError("quota", opts);
-  // A 401/403 with no recognised reason and no Interactions code is the key layer.
-  if (!code && (status === 401 || status === 403)) return geminiError("invalid_key", opts);
+  // A 401/403 we can't explain (no known reason, no Interactions code) is a
+  // refusal, not proof the key is bad. Say so, and leave the key alone.
+  if (!code && (status === 401 || status === 403)) return geminiError("access_denied", opts);
   if (status >= 500) return geminiError("server", opts);
   return geminiError("bad_response", opts);
 }
@@ -411,7 +443,9 @@ async function attempt({ uri, key, signal, onDelta, onUsage }, state) {
       // A bug in the caller's own onDelta is not Gemini's fault: pass it through.
       if (consumerError && err === consumerError) throw err;
       if (err?.type) throw err;
-      throw geminiError(isAbort(err) ? limit.reason() : "bad_response", { cause: err });
+      // Anything else thrown while reading is the connection failing mid-stream
+      // (a phone locking, a network change): readSse never throws on bad data.
+      throw geminiError(isAbort(err) ? limit.reason() : "interrupted", { cause: err });
     }
 
     const result = acceptResult(text, terminal);
