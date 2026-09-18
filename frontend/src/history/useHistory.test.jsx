@@ -101,7 +101,7 @@ describe("useHistory", () => {
       saved = await result.current.save(INPUT);
     });
     expect(saved).toBeNull();
-    expect(result.current.error).toMatchObject({ type: "quota" });
+    expect(result.current.error).toMatchObject({ type: "quota", op: "save" });
     expect(result.current.entries).toEqual([]);
     act(() => result.current.clearError());
     expect(result.current.error).toBeNull();

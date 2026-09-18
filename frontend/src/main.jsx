@@ -8,12 +8,15 @@ import "@fontsource-variable/fraunces";
 import "@fontsource-variable/inter";
 
 import App from "./App.jsx";
+import HistoryProvider from "./history/HistoryProvider.jsx";
 import "./index.css";
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
     <BrowserRouter>
-      <App />
+      <HistoryProvider>
+        <App />
+      </HistoryProvider>
     </BrowserRouter>
   </StrictMode>,
 );

@@ -5,6 +5,7 @@ import { Copy, Check, AlertCircle, Lock } from "lucide-react";
 import { canonicalizeYouTubeUrl, generateReflection, MODEL } from "./lib/gemini.js";
 import { clearKey, getKey, setKey, subscribeToKeyChanges } from "./lib/keyStore.js";
 import { initAnalytics, trackEvent, trackPageView } from "./analytics.js";
+import { useHistory } from "./history/useHistory.js";
 import ConnectGeminiModal from "./ConnectGeminiModal.jsx";
 import ProviderChip from "./ProviderChip.jsx";
 import About from "./About.jsx";
@@ -61,6 +62,10 @@ export default function App() {
 
   const location = useLocation();
   const navigate = useNavigate();
+  // Every finished article is kept (in this browser, for now) and listed in
+  // the sidebar. Saving is best-effort: a failing store never blocks the result.
+  const articleHistory = useHistory();
+  const historyError = articleHistory.error;
 
   useEffect(() => {
     initAnalytics();
@@ -80,6 +85,12 @@ export default function App() {
 
   // Another tab connected or forgot the key: keep the chip honest.
   useEffect(() => subscribeToKeyChanges(() => setHasKey(Boolean(getKey()))), []);
+
+  // A store failure is invisible otherwise (the article is still on screen).
+  // Report it so a quota or blocked-storage problem shows up in the dashboard.
+  useEffect(() => {
+    if (historyError) trackEvent("history_error", { op: historyError.op || "unknown", error_type: historyError.type || "unknown" });
+  }, [historyError]);
 
   // Elapsed time while Gemini reads the video (the silent phase is 25 s to
   // several minutes). Visible only; the live region is not updated every second.
@@ -148,6 +159,8 @@ export default function App() {
     setError("");
     setArticle("");
     setCopied(false);
+    // A new run is a new entry; the one open from the sidebar is no longer what's on screen.
+    articleHistory.deselect();
     setAnnouncement("Generating. Gemini is watching the sermon and writing the reflection.");
 
     // The video id is the one thing about the video we record, and the page
@@ -182,6 +195,9 @@ export default function App() {
         first_text_ms: firstTextAt ? firstTextAt - startedAt : 0,
         word_count: countWords(result),
       });
+      // After the success event: a refused save must not look like a failed
+      // generation. Resolves null on failure and reports via `error` (see above).
+      await articleHistory.save({ url: targetUrl, article: result, provider: PROVIDER, model: MODEL });
     } catch (err) {
       setArticle("");
       setAnnouncement(err?.type === "cancelled" ? "Generation cancelled." : "");

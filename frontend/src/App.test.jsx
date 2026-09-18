@@ -5,6 +5,8 @@ import App from "./App.jsx";
 import { trackEvent, trackPageView } from "./analytics.js";
 import { generateReflection, validateKey } from "./lib/gemini.js";
 import { clearKey, getKey, setKey } from "./lib/keyStore.js";
+import HistoryProvider from "./history/HistoryProvider.jsx";
+import { createMemoryStore } from "./history/store/memoryStore.js";
 
 // Analytics is mocked file-wide: the existing tests don't assert on it (the
 // mocked fns are harmless no-ops), and the analytics-specific tests below assert
@@ -29,11 +31,16 @@ vi.mock("./lib/gemini.js", async (importOriginal) => ({
 const KEY = "AIzaTESTKEY00000000000000000000000000000";
 const URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
 
+// A fresh in-memory history store per test, so tests can inspect what the
+// app saved without going through localStorage.
+let historyStore;
+
 beforeEach(() => {
   vi.clearAllMocks();
   clearKey();
   window.localStorage.clear();
   window.sessionStorage.clear();
+  historyStore = createMemoryStore();
 });
 
 afterEach(() => {
@@ -59,7 +66,13 @@ function mockFailure(type, message, status, extra = {}) {
 }
 
 function renderApp(initialEntries = ["/"]) {
-  return render(<MemoryRouter initialEntries={initialEntries}><App /></MemoryRouter>);
+  return render(
+    <MemoryRouter initialEntries={initialEntries}>
+      <HistoryProvider store={historyStore}>
+        <App />
+      </HistoryProvider>
+    </MemoryRouter>,
+  );
 }
 
 function typeUrl(value = URL) {
@@ -866,5 +879,82 @@ describe("Analytics events", () => {
     await screen.findByRole("button", { name: /copied/i });
 
     expect(trackEvent).toHaveBeenCalledWith("copy_article", { success: true });
+  });
+});
+
+describe("article history", () => {
+  const ARTICLE = "The Quiet Work of Waiting on God\n\nPsalm 27:13-14\n\nA reflection body.";
+
+  it("saves the finished article with its url, provider and model", async () => {
+    connectKey();
+    mockArticle(ARTICLE);
+    renderApp();
+    typeUrl();
+    clickGenerate();
+    await screen.findByLabelText("Generated article");
+    await waitFor(async () => expect(await historyStore.list()).toHaveLength(1));
+    const [entry] = await historyStore.list();
+    expect(entry).toMatchObject({
+      url: URL,
+      videoId: "dQw4w9WgXcQ",
+      title: "The Quiet Work of Waiting on God",
+      article: ARTICLE,
+      provider: "gemini",
+      model: "gemini-test-model",
+    });
+    expect(trackEvent).not.toHaveBeenCalledWith("history_error", expect.anything());
+  });
+
+  it("does not save when generation fails", async () => {
+    connectKey();
+    mockFailure("network", "Could not reach Google.", 0);
+    renderApp();
+    typeUrl();
+    clickGenerate();
+    await screen.findByRole("alert");
+    expect(await historyStore.list()).toEqual([]);
+  });
+
+  it("does not save when generation is cancelled", async () => {
+    connectKey();
+    generateReflection.mockImplementation(({ signal, onDelta }) => new Promise((_, reject) => {
+      onDelta("partial text");
+      signal.addEventListener("abort", () => reject(Object.assign(new Error("cancelled"), { type: "cancelled" })));
+    }));
+    renderApp();
+    typeUrl();
+    clickGenerate();
+    await screen.findByLabelText("Generated article");
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByLabelText("Generated article")).toBeNull());
+    expect(await historyStore.list()).toEqual([]);
+  });
+
+  it("keeps the article on screen and reports history_error when the store refuses the save", async () => {
+    connectKey();
+    mockArticle(ARTICLE);
+    historyStore.save = vi.fn().mockRejectedValue(Object.assign(new Error("full"), { type: "quota" }));
+    renderApp();
+    typeUrl();
+    clickGenerate();
+    await screen.findByLabelText("Generated article");
+    await waitFor(() => expect(trackEvent).toHaveBeenCalledWith("history_error", { op: "save", error_type: "quota" }));
+    expect(screen.getByLabelText("Generated article")).toHaveTextContent("The Quiet Work of Waiting on God");
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(trackEvent).toHaveBeenCalledWith("generate_success", expect.objectContaining({ video_id: "dQw4w9WgXcQ" }));
+  });
+
+  it("shows history as unavailable without breaking generation when storage is blocked", async () => {
+    connectKey();
+    mockArticle(ARTICLE);
+    historyStore.isAvailable = () => false;
+    const spy = vi.spyOn(historyStore, "save");
+    renderApp();
+    typeUrl();
+    clickGenerate();
+    await screen.findByLabelText("Generated article");
+    await waitFor(() => expect(trackEvent).toHaveBeenCalledWith("generate_success", expect.anything()));
+    expect(spy).not.toHaveBeenCalled();
+    expect(trackEvent).not.toHaveBeenCalledWith("history_error", expect.anything());
   });
 });

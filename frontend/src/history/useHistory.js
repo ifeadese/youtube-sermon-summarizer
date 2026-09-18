@@ -27,8 +27,14 @@ export function useHistory() {
   // The id the user last picked. It may name an entry that has since vanished
   // (deleted in another tab); `active` below is derived, so the UI never sees that.
   const [activeId, setActiveId] = useState(null);
+  // The last failure, tagged with the operation ("list" | "save" | "remove" |
+  // "clear") so the UI can react to a failed save differently from the rest.
   const [error, setError] = useState(null);
   const mounted = useRef(true);
+
+  const fail = useCallback((op, err) => {
+    if (mounted.current) setError(Object.assign(err, { op }));
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -36,10 +42,10 @@ export function useHistory() {
       if (mounted.current) setEntries(next);
       return next;
     } catch (err) {
-      if (mounted.current) setError(err);
+      fail("list", err);
       return null;
     }
-  }, [store]);
+  }, [store, fail]);
 
   // First load + change notifications from outside this instance (other tabs).
   useEffect(() => {
@@ -53,7 +59,7 @@ export function useHistory() {
         },
         (err) => {
           if (!mounted.current) return;
-          setError(err);
+          fail("list", err);
           setStatus("ready");
         },
       );
@@ -63,7 +69,7 @@ export function useHistory() {
       mounted.current = false;
       unsubscribe();
     };
-  }, [store, refresh]);
+  }, [store, refresh, fail]);
 
   /**
    * Save a finished generation. Resolves to the saved entry (now active) or
@@ -76,7 +82,7 @@ export function useHistory() {
       try {
         entry = createEntry(input);
       } catch (err) {
-        setError(err);
+        fail("save", err);
         return null;
       }
       try {
@@ -86,11 +92,11 @@ export function useHistory() {
         if (mounted.current) setActiveId(entry.id);
         return entry;
       } catch (err) {
-        if (mounted.current) setError(err);
+        fail("save", err);
         return null;
       }
     },
-    [store, status, refresh],
+    [store, status, refresh, fail],
   );
 
   /** Mark an entry active. Returns it, or null if it isn't in the list. */
@@ -112,11 +118,11 @@ export function useHistory() {
         await refresh();
         return true;
       } catch (err) {
-        if (mounted.current) setError(err);
+        fail("remove", err);
         return false;
       }
     },
-    [store, refresh],
+    [store, refresh, fail],
   );
 
   const clear = useCallback(async () => {
@@ -125,10 +131,10 @@ export function useHistory() {
       await refresh();
       return true;
     } catch (err) {
-      if (mounted.current) setError(err);
+      fail("clear", err);
       return false;
     }
-  }, [store, refresh]);
+  }, [store, refresh, fail]);
 
   const clearError = useCallback(() => setError(null), []);
 
