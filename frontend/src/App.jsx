@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Routes, Route, Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { Copy, Check, AlertCircle, Lock, History, RotateCcw, X } from "lucide-react";
 
 import { canonicalizeYouTubeUrl, generateReflection, MODEL } from "./lib/gemini.js";
 import { clearKey, getKey, setKey, subscribeToKeyChanges } from "./lib/keyStore.js";
+import { countWords } from "./lib/text.js";
 import { initAnalytics, trackEvent, trackPageView } from "./analytics.js";
 import { useHistory } from "./history/useHistory.js";
+import { videoIdFromUrl } from "./history/entry.js";
 import { readCollapsed, writeCollapsed } from "./history/collapsedPref.js";
 import { shortDate } from "./history/format.js";
 import HistorySidebar from "./history/HistorySidebar.jsx";
@@ -27,8 +29,16 @@ function extractDomain(urlString) {
   }
 }
 
-function countWords(text) {
-  return text.trim() ? text.trim().split(/\s+/).length : 0;
+/**
+ * A stable function that always calls the latest `fn`. The sidebar is
+ * memoised; handing it these keeps it from re-rendering on every streamed chunk.
+ */
+function useStableCallback(fn) {
+  const latest = useRef(fn);
+  useEffect(() => {
+    latest.current = fn;
+  });
+  return useCallback((...args) => latest.current(...args), []);
 }
 
 function formatElapsed(ms) {
@@ -60,6 +70,9 @@ export default function App() {
   const [openedFromHistory, setOpenedFromHistory] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const [unseenNew, setUnseenNew] = useState(false);
+  // The canonical URL of the running generation, for the sidebar's pending
+  // row. Not `url`: the input stays editable while Gemini works.
+  const [generatingUrl, setGeneratingUrl] = useState("");
 
   const inFlight = useRef(false);
   const copyTimer = useRef(null);
@@ -71,6 +84,11 @@ export default function App() {
   const scrolledToResult = useRef(false);
   const urlInputRef = useRef(null);
   const historyPillRef = useRef(null);
+  // Where focus goes once the drawer has closed (the page is inert until then).
+  const focusAfterDrawer = useRef(null);
+  // Bumped whenever what's on screen changes, so a save that lands late
+  // doesn't flash "Saved" over a different article.
+  const screenSeq = useRef(0);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -80,6 +98,15 @@ export default function App() {
   const historyError = articleHistory.error;
   const { active: activeEntry, clearError: clearHistoryError } = articleHistory;
   const saveFailed = historyError?.op === "save";
+
+  // What the memoised sidebar (and the drawer's listeners) call. Stable, so a
+  // streaming article doesn't re-render fifty history rows per chunk.
+  const closeDrawer = useStableCallback(() => closeDrawerTo(historyPillRef));
+  const onSelectEntry = useStableCallback(handleSelectEntry);
+  const onNewArticle = useStableCallback(handleNewArticle);
+  const onRemoveEntry = useStableCallback(handleRemoveEntry);
+  const onClearHistory = useStableCallback(handleClearHistory);
+  const onToggleCollapsed = useStableCallback(toggleCollapsed);
 
   useEffect(() => {
     initAnalytics();
@@ -119,15 +146,32 @@ export default function App() {
     return () => clearTimeout(id);
   }, [savedFlash]);
 
-  // Mobile drawer: Escape closes it.
+  // Mobile drawer: Escape closes it, unless something inside (a delete
+  // confirm) already used the key. It only exists below 56rem (App.css), so a
+  // window that grows past that closes it rather than leave the page inert.
   useEffect(() => {
     if (!drawerOpen) return undefined;
     const onKey = (event) => {
-      if (event.key === "Escape") closeDrawer();
+      if (event.key === "Escape" && !event.defaultPrevented) closeDrawer();
+    };
+    const narrow = window.matchMedia?.("(max-width: 56rem)");
+    const onResize = () => {
+      if (!narrow.matches) closeDrawer();
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  });
+    narrow?.addEventListener("change", onResize);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      narrow?.removeEventListener("change", onResize);
+    };
+  }, [drawerOpen, closeDrawer]);
+
+  // Focus moves only after the close has committed and `inert` is gone.
+  useEffect(() => {
+    if (drawerOpen) return;
+    focusAfterDrawer.current?.current?.focus();
+    focusAfterDrawer.current = null;
+  }, [drawerOpen]);
 
   // Elapsed time while Gemini reads the video (the silent phase is 25 s to
   // several minutes). Visible only; the live region is not updated every second.
@@ -205,17 +249,20 @@ export default function App() {
     articleHistory.deselect();
     setOpenedFromHistory(false);
     setSavedFlash(false);
+    setGeneratingUrl(targetUrl);
+    screenSeq.current += 1;
     setAnnouncement("Generating. Gemini is watching the sermon and writing the reflection.");
 
     // The video id is the one thing about the video we record, and the page
     // says so. Never the article, never the key. `targetUrl` is canonical.
-    const meta = { video_id: new URL(targetUrl).searchParams.get("v"), provider: PROVIDER, model: MODEL };
+    const meta = { video_id: videoIdFromUrl(targetUrl), provider: PROVIDER, model: MODEL };
     trackEvent("generate_submit", meta);
 
     const controller = new AbortController();
     abortRef.current = controller;
     const startedAt = Date.now();
     let firstTextAt = 0;
+    let finished = "";
 
     try {
       const result = await generateReflection({
@@ -239,13 +286,7 @@ export default function App() {
         first_text_ms: firstTextAt ? firstTextAt - startedAt : 0,
         word_count: countWords(result),
       });
-      // After the success event: a refused save must not look like a failed
-      // generation. Resolves null on failure and reports via `error` (see above).
-      const saved = await articleHistory.save({ url: targetUrl, article: result, provider: PROVIDER, model: MODEL });
-      if (saved) {
-        setSavedFlash(true);
-        setUnseenNew(true);
-      }
+      finished = result;
     } catch (err) {
       setArticle("");
       setAnnouncement(err?.type === "cancelled" ? "Generation cancelled." : "");
@@ -273,8 +314,20 @@ export default function App() {
     } finally {
       abortRef.current = null;
       setLoading(false);
+      setGeneratingUrl("");
       inFlight.current = false;
     }
+
+    // Saved after the run has ended, and not awaited: the store may be slow
+    // (a server, later) and the article is already on screen. `save` resolves
+    // null on failure and reports via `error` (see above); it never throws.
+    if (!finished) return;
+    const shown = screenSeq.current;
+    articleHistory.save({ url: targetUrl, article: finished, provider: PROVIDER, model: MODEL }).then((saved) => {
+      if (!saved) return;
+      setUnseenNew(true);
+      if (screenSeq.current === shown) setSavedFlash(true);
+    });
   }
 
   function handleCancel() {
@@ -284,10 +337,8 @@ export default function App() {
   // ── Sidebar ──────────────────────────────────────────────────────────────
 
   function toggleCollapsed() {
-    setCollapsed((current) => {
-      writeCollapsed(!current);
-      return !current;
-    });
+    writeCollapsed(!collapsed);
+    setCollapsed(!collapsed);
   }
 
   function openDrawer() {
@@ -295,9 +346,10 @@ export default function App() {
     setDrawerOpen(true);
   }
 
-  function closeDrawer() {
+  /** Close the drawer; `target` gets focus once it has (see the effect above). */
+  function closeDrawerTo(target) {
+    focusAfterDrawer.current = target;
     setDrawerOpen(false);
-    historyPillRef.current?.focus();
   }
 
   /** Show a saved article again: fill the input, render the text, mark it active. */
@@ -311,7 +363,8 @@ export default function App() {
     setCopied(false);
     setSavedFlash(false);
     setOpenedFromHistory(true);
-    setDrawerOpen(false);
+    screenSeq.current += 1;
+    if (drawerOpen) closeDrawerTo(historyPillRef);
     trackEvent("history_select", { video_id: entry.videoId });
   }
 
@@ -324,8 +377,9 @@ export default function App() {
     setError("");
     setCopied(false);
     setOpenedFromHistory(false);
-    setDrawerOpen(false);
-    urlInputRef.current?.focus();
+    screenSeq.current += 1;
+    if (drawerOpen) closeDrawerTo(urlInputRef);
+    else urlInputRef.current?.focus();
   }
 
   async function handleRemoveEntry(id) {
@@ -383,9 +437,13 @@ export default function App() {
     }
   }
 
+  // Behind the open drawer nothing is reachable: the scrim blocks the mouse,
+  // `inert` does the same for Tab and screen readers. (React 18 wants a string.)
+  const pageInert = drawerOpen && location.pathname === "/" ? "" : undefined;
+
   return (
     <div className="page">
-      <header className="topbar">
+      <header className="topbar" inert={pageInert}>
         <Link
           className="brand"
           to="/"
@@ -446,18 +504,18 @@ export default function App() {
             status={articleHistory.status}
             activeId={articleHistory.activeId}
             busy={loading}
-            pendingUrl={loading ? url : ""}
+            pendingUrl={generatingUrl}
             collapsed={collapsed}
             open={drawerOpen}
-            onSelect={handleSelectEntry}
-            onNew={handleNewArticle}
-            onRemove={handleRemoveEntry}
-            onClear={handleClearHistory}
-            onToggleCollapsed={toggleCollapsed}
+            onSelect={onSelectEntry}
+            onNew={onNewArticle}
+            onRemove={onRemoveEntry}
+            onClear={onClearHistory}
+            onToggleCollapsed={onToggleCollapsed}
             onClose={closeDrawer}
           />
           {drawerOpen && <div className="history-scrim" onClick={closeDrawer} aria-hidden="true" />}
-          <main className="hero" id="top">
+          <main className="hero" id="top" inert={pageInert}>
           <div className="hero__inner">
             <div className="header">
               <span className="wordmark">
@@ -625,7 +683,7 @@ export default function App() {
 
 
 
-      <footer className="footer">
+      <footer className="footer" inert={pageInert}>
         <span className="footer__copyright">
           &copy; 2026 {BRAND}. All rights reserved.
         </span>

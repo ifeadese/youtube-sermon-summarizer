@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { memo, useEffect, useId, useMemo, useRef, useState } from "react";
 import { CircleOff, Clock, PanelLeftClose, PanelLeftOpen, Plus, Trash2, X } from "lucide-react";
 
 import { MAX_ENTRIES } from "./entry.js";
@@ -6,7 +6,8 @@ import { groupByDay, relativeTime, shortVideoRef } from "./format.js";
 
 /**
  * The article history sidebar. Presentation only: it receives the hook's
- * state and callbacks from App and knows nothing about storage.
+ * state and callbacks from App and knows nothing about storage. Memoised:
+ * App re-renders on every streamed chunk and none of these props change then.
  *
  * Desktop: a column beside the hero, foldable to a narrow rail.
  * Mobile: the same panel as a left drawer (`open`), see App.css.
@@ -26,7 +27,7 @@ import { groupByDay, relativeTime, shortVideoRef } from "./format.js";
  * @param {() => void} props.onToggleCollapsed
  * @param {() => void} props.onClose
  */
-export default function HistorySidebar({
+function HistorySidebar({
   entries,
   status,
   activeId,
@@ -46,6 +47,8 @@ export default function HistorySidebar({
   const listRef = useRef(null);
   const newBtnRef = useRef(null);
   const closeBtnRef = useRef(null);
+  // The row to hand focus back to when its delete confirm is dismissed.
+  const refocusId = useRef(null);
   const headingId = useId();
 
   // Drawer opened: put focus inside it. Closing returns focus in App.
@@ -57,15 +60,28 @@ export default function HistorySidebar({
   const confirmEntry = confirmId ? entries.find((e) => e.id === confirmId) : null;
   const confirming = confirmEntry ? confirmId : null;
 
+  // The confirm's buttons unmount with it; without this, focus falls to <body>.
+  useEffect(() => {
+    if (confirming || !refocusId.current) return;
+    const rows = Array.from(listRef.current?.querySelectorAll(".history__open") || []);
+    rows.find((row) => row.dataset.id === refocusId.current)?.focus();
+    refocusId.current = null;
+  }, [confirming]);
+
   const count = entries.length;
   const atCap = count >= MAX_ENTRIES;
-  const groups = groupByDay(entries);
+  const groups = useMemo(() => groupByDay(entries), [entries]);
   const showPending = busy && Boolean(pendingUrl);
 
   function confirmDelete(id) {
     onRemove(id);
     setConfirmId(null);
     newBtnRef.current?.focus();
+  }
+
+  function keepEntry() {
+    refocusId.current = confirming;
+    setConfirmId(null);
   }
 
   function clearAll() {
@@ -78,8 +94,8 @@ export default function HistorySidebar({
   // backs out of a confirm. Rows are plain buttons so Tab still works.
   function handleListKeyDown(event) {
     if (event.key === "Escape" && confirming) {
-      event.preventDefault();
-      setConfirmId(null);
+      event.preventDefault(); // also tells App's drawer listener the key is spent
+      keepEntry();
       return;
     }
     const rows = Array.from(listRef.current?.querySelectorAll(".history__open") || []);
@@ -160,7 +176,7 @@ export default function HistorySidebar({
                       <button type="button" className="history__confirm-btn history__confirm-btn--yes" onClick={() => confirmDelete(entry.id)}>
                         Delete
                       </button>
-                      <button type="button" className="history__confirm-btn" onClick={() => setConfirmId(null)} autoFocus>
+                      <button type="button" className="history__confirm-btn" onClick={keepEntry} autoFocus>
                         Keep
                       </button>
                     </li>
@@ -265,3 +281,5 @@ export default function HistorySidebar({
     </aside>
   );
 }
+
+export default memo(HistorySidebar);

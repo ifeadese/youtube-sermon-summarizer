@@ -1172,6 +1172,94 @@ describe("history sidebar", () => {
     expect(pill).toHaveFocus();
   });
 
+  it("the pending row names the video being generated, whatever the input box says", async () => {
+    connectKey();
+    generateReflection.mockImplementation(() => new Promise(() => {}));
+    renderApp();
+    typeUrl("youtube.com/watch?v=dQw4w9WgXcQ"); // scheme-less: accepted, but not parseable as typed
+    clickGenerate();
+    expect(await panel().findByText("youtu.be/dQw4w9WgXcQ")).toBeInTheDocument();
+    typeUrl("");
+    expect(panel().getByText(/Writing article/)).toBeInTheDocument();
+    expect(panel().getByText("youtu.be/dQw4w9WgXcQ")).toBeInTheDocument();
+  });
+
+  it("stops loading as soon as the article is done, without waiting for a slow store", async () => {
+    connectKey();
+    mockArticle(ARTICLE);
+    const realSave = historyStore.save;
+    let release;
+    historyStore.save = (entry) => new Promise((resolve) => {
+      release = () => resolve(realSave(entry));
+    });
+    renderApp();
+    typeUrl();
+    clickGenerate();
+    await screen.findByLabelText("Generated article");
+    await waitFor(() => expect(release).toBeTypeOf("function"));
+    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+    expect(panel().getByRole("button", { name: "New article" })).toBeEnabled();
+    expect(screen.queryByText("Saved")).toBeNull();
+    await act(async () => release());
+    expect(await screen.findByText("Saved")).toBeInTheDocument();
+  });
+
+  it("a save that lands after the user moved on does not flash Saved over another article", async () => {
+    seed();
+    connectKey();
+    mockArticle(ARTICLE);
+    const realSave = historyStore.save;
+    let release;
+    historyStore.save = (entry) => new Promise((resolve) => {
+      release = () => resolve(realSave(entry));
+    });
+    renderApp();
+    typeUrl();
+    clickGenerate();
+    await waitFor(() => expect(release).toBeTypeOf("function"));
+    fireEvent.click(row("Bread for the Journey"));
+    await act(async () => release());
+    await panel().findByRole("button", { name: /^The Quiet Work of Waiting on God/ });
+    expect(screen.queryByText("Saved")).toBeNull();
+    expect(row("Bread for the Journey")).toHaveAttribute("aria-current", "true");
+  });
+
+  it("Escape backs out of a delete confirm without also closing the drawer", async () => {
+    seed();
+    renderApp();
+    const first = await panel().findByRole("button", { name: /^Bread for the Journey/ });
+    fireEvent.click(screen.getByRole("button", { name: /History/, expanded: false }));
+    first.focus();
+    fireEvent.keyDown(first, { key: "Delete" });
+    fireEvent.keyDown(panel().getByRole("button", { name: "Keep" }), { key: "Escape" });
+    expect(panel().queryByRole("alert")).toBeNull();
+    expect(sidebar()).toHaveClass("history--open");
+    expect(row("Bread for the Journey")).toHaveFocus();
+  });
+
+  it("Keep hands focus back to the row it was asked about", async () => {
+    seed();
+    renderApp();
+    await panel().findByText("Bread for the Journey");
+    fireEvent.click(panel().getByRole("button", { name: "Delete Bread for the Journey" }));
+    fireEvent.click(panel().getByRole("button", { name: "Keep" }));
+    expect(row("Bread for the Journey")).toHaveFocus();
+  });
+
+  it("the open drawer makes the page behind it inert, and a row tap returns focus to the pill", async () => {
+    seed();
+    renderApp();
+    await panel().findByText("Bread for the Journey");
+    const pill = screen.getByRole("button", { name: /History/, expanded: false });
+    expect(screen.getByRole("main")).not.toHaveAttribute("inert");
+    fireEvent.click(pill);
+    expect(screen.getByRole("main")).toHaveAttribute("inert");
+    expect(screen.getByRole("banner")).toHaveAttribute("inert");
+    fireEvent.click(row("Bread for the Journey"));
+    expect(screen.getByRole("main")).not.toHaveAttribute("inert");
+    expect(pill).toHaveFocus();
+  });
+
   it("picks up entries saved in another tab and drops a current one that vanished", async () => {
     seed();
     renderApp();
