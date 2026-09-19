@@ -1,10 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Routes, Route, Link, NavLink, useLocation, useNavigate } from "react-router-dom";
-import { Copy, Check, AlertCircle, Lock } from "lucide-react";
+import { Copy, Check, AlertCircle, Lock, History, RotateCcw, X } from "lucide-react";
 
 import { canonicalizeYouTubeUrl, generateReflection, MODEL } from "./lib/gemini.js";
 import { clearKey, getKey, setKey, subscribeToKeyChanges } from "./lib/keyStore.js";
+import { countWords } from "./lib/text.js";
 import { initAnalytics, trackEvent, trackPageView } from "./analytics.js";
+import { useHistory } from "./history/useHistory.js";
+import { videoIdFromUrl } from "./history/entry.js";
+import { readCollapsed, writeCollapsed } from "./history/collapsedPref.js";
+import { shortDate } from "./history/format.js";
+import HistorySidebar from "./history/HistorySidebar.jsx";
 import ConnectGeminiModal from "./ConnectGeminiModal.jsx";
 import ProviderChip from "./ProviderChip.jsx";
 import About from "./About.jsx";
@@ -23,8 +29,16 @@ function extractDomain(urlString) {
   }
 }
 
-function countWords(text) {
-  return text.trim() ? text.trim().split(/\s+/).length : 0;
+/**
+ * A stable function that always calls the latest `fn`. The sidebar is
+ * memoised; handing it these keeps it from re-rendering on every streamed chunk.
+ */
+function useStableCallback(fn) {
+  const latest = useRef(fn);
+  useEffect(() => {
+    latest.current = fn;
+  });
+  return useCallback((...args) => latest.current(...args), []);
 }
 
 function formatElapsed(ms) {
@@ -49,6 +63,16 @@ export default function App() {
   const [announcement, setAnnouncement] = useState("");
   const [elapsedMs, setElapsedMs] = useState(0);
   const [retrying, setRetrying] = useState(false);
+  // Sidebar chrome. `openedFromHistory` tells the result bar whether what's on
+  // screen came from the list (chip + Regenerate) or was just generated (Saved).
+  const [collapsed, setCollapsed] = useState(readCollapsed);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [openedFromHistory, setOpenedFromHistory] = useState(false);
+  const [savedFlash, setSavedFlash] = useState(false);
+  const [unseenNew, setUnseenNew] = useState(false);
+  // The canonical URL of the running generation, for the sidebar's pending
+  // row. Not `url`: the input stays editable while Gemini works.
+  const [generatingUrl, setGeneratingUrl] = useState("");
 
   const inFlight = useRef(false);
   const copyTimer = useRef(null);
@@ -58,9 +82,31 @@ export default function App() {
   const startedAtRef = useRef(0);
   const resultRef = useRef(null);
   const scrolledToResult = useRef(false);
+  const urlInputRef = useRef(null);
+  const historyPillRef = useRef(null);
+  // Where focus goes once the drawer has closed (the page is inert until then).
+  const focusAfterDrawer = useRef(null);
+  // Bumped whenever what's on screen changes, so a save that lands late
+  // doesn't flash "Saved" over a different article.
+  const screenSeq = useRef(0);
 
   const location = useLocation();
   const navigate = useNavigate();
+  // Every finished article is kept (in this browser, for now) and listed in
+  // the sidebar. Saving is best-effort: a failing store never blocks the result.
+  const articleHistory = useHistory();
+  const historyError = articleHistory.error;
+  const { active: activeEntry, clearError: clearHistoryError } = articleHistory;
+  const saveFailed = historyError?.op === "save";
+
+  // What the memoised sidebar (and the drawer's listeners) call. Stable, so a
+  // streaming article doesn't re-render fifty history rows per chunk.
+  const closeDrawer = useStableCallback(() => closeDrawerTo(historyPillRef));
+  const onSelectEntry = useStableCallback(handleSelectEntry);
+  const onNewArticle = useStableCallback(handleNewArticle);
+  const onRemoveEntry = useStableCallback(handleRemoveEntry);
+  const onClearHistory = useStableCallback(handleClearHistory);
+  const onToggleCollapsed = useStableCallback(toggleCollapsed);
 
   useEffect(() => {
     initAnalytics();
@@ -80,6 +126,52 @@ export default function App() {
 
   // Another tab connected or forgot the key: keep the chip honest.
   useEffect(() => subscribeToKeyChanges(() => setHasKey(Boolean(getKey()))), []);
+
+  // A store failure is invisible otherwise (the article is still on screen).
+  // Report it so a quota or blocked-storage problem shows up in the dashboard.
+  useEffect(() => {
+    if (historyError) trackEvent("history_error", { op: historyError.op || "unknown", error_type: historyError.type || "unknown" });
+  }, [historyError]);
+
+  // The save-failed toast and the "Saved" chip both time out on their own.
+  useEffect(() => {
+    if (!saveFailed) return undefined;
+    const id = setTimeout(clearHistoryError, 8000);
+    return () => clearTimeout(id);
+  }, [saveFailed, clearHistoryError]);
+
+  useEffect(() => {
+    if (!savedFlash) return undefined;
+    const id = setTimeout(() => setSavedFlash(false), 4000);
+    return () => clearTimeout(id);
+  }, [savedFlash]);
+
+  // Mobile drawer: Escape closes it, unless something inside (a delete
+  // confirm) already used the key. It only exists below 56rem (App.css), so a
+  // window that grows past that closes it rather than leave the page inert.
+  useEffect(() => {
+    if (!drawerOpen) return undefined;
+    const onKey = (event) => {
+      if (event.key === "Escape" && !event.defaultPrevented) closeDrawer();
+    };
+    const narrow = window.matchMedia?.("(max-width: 56rem)");
+    const onResize = () => {
+      if (!narrow.matches) closeDrawer();
+    };
+    window.addEventListener("keydown", onKey);
+    narrow?.addEventListener("change", onResize);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      narrow?.removeEventListener("change", onResize);
+    };
+  }, [drawerOpen, closeDrawer]);
+
+  // Focus moves only after the close has committed and `inert` is gone.
+  useEffect(() => {
+    if (drawerOpen) return;
+    focusAfterDrawer.current?.current?.focus();
+    focusAfterDrawer.current = null;
+  }, [drawerOpen]);
 
   // Elapsed time while Gemini reads the video (the silent phase is 25 s to
   // several minutes). Visible only; the live region is not updated every second.
@@ -116,14 +208,19 @@ export default function App() {
 
   function handleSubmit(event) {
     event.preventDefault();
+    startGeneration(url);
+  }
+
+  /** Validate a pasted link, then generate — or ask for a key first. */
+  function startGeneration(rawUrl) {
     if (inFlight.current) return;
 
     // One definition of "a YouTube video link", shared with the client: a
     // playlist or channel page is refused here, before the key dialog opens,
     // and music./scheme-less/timestamped links are accepted and normalised.
-    const videoUrl = canonicalizeYouTubeUrl(url);
+    const videoUrl = canonicalizeYouTubeUrl(rawUrl);
     if (!videoUrl) {
-      trackEvent("invalid_url_attempt", { domain: extractDomain(url.trim()) });
+      trackEvent("invalid_url_attempt", { domain: extractDomain(String(rawUrl).trim()) });
       setError("Please enter a valid YouTube URL.");
       return;
     }
@@ -148,17 +245,24 @@ export default function App() {
     setError("");
     setArticle("");
     setCopied(false);
+    // A new run is a new entry; the one open from the sidebar is no longer what's on screen.
+    articleHistory.deselect();
+    setOpenedFromHistory(false);
+    setSavedFlash(false);
+    setGeneratingUrl(targetUrl);
+    screenSeq.current += 1;
     setAnnouncement("Generating. Gemini is watching the sermon and writing the reflection.");
 
     // The video id is the one thing about the video we record, and the page
     // says so. Never the article, never the key. `targetUrl` is canonical.
-    const meta = { video_id: new URL(targetUrl).searchParams.get("v"), provider: PROVIDER, model: MODEL };
+    const meta = { video_id: videoIdFromUrl(targetUrl), provider: PROVIDER, model: MODEL };
     trackEvent("generate_submit", meta);
 
     const controller = new AbortController();
     abortRef.current = controller;
     const startedAt = Date.now();
     let firstTextAt = 0;
+    let finished = "";
 
     try {
       const result = await generateReflection({
@@ -182,6 +286,7 @@ export default function App() {
         first_text_ms: firstTextAt ? firstTextAt - startedAt : 0,
         word_count: countWords(result),
       });
+      finished = result;
     } catch (err) {
       setArticle("");
       setAnnouncement(err?.type === "cancelled" ? "Generation cancelled." : "");
@@ -209,12 +314,93 @@ export default function App() {
     } finally {
       abortRef.current = null;
       setLoading(false);
+      setGeneratingUrl("");
       inFlight.current = false;
     }
+
+    // Saved after the run has ended, and not awaited: the store may be slow
+    // (a server, later) and the article is already on screen. `save` resolves
+    // null on failure and reports via `error` (see above); it never throws.
+    if (!finished) return;
+    const shown = screenSeq.current;
+    articleHistory.save({ url: targetUrl, article: finished, provider: PROVIDER, model: MODEL }).then((saved) => {
+      if (!saved) return;
+      setUnseenNew(true);
+      if (screenSeq.current === shown) setSavedFlash(true);
+    });
   }
 
   function handleCancel() {
     abortRef.current?.abort();
+  }
+
+  // ── Sidebar ──────────────────────────────────────────────────────────────
+
+  function toggleCollapsed() {
+    writeCollapsed(!collapsed);
+    setCollapsed(!collapsed);
+  }
+
+  function openDrawer() {
+    setUnseenNew(false);
+    setDrawerOpen(true);
+  }
+
+  /** Close the drawer; `target` gets focus once it has (see the effect above). */
+  function closeDrawerTo(target) {
+    focusAfterDrawer.current = target;
+    setDrawerOpen(false);
+  }
+
+  /** Show a saved article again: fill the input, render the text, mark it active. */
+  function handleSelectEntry(id) {
+    if (loading) return;
+    const entry = articleHistory.select(id);
+    if (!entry) return;
+    setUrl(entry.url);
+    setArticle(entry.article);
+    setError("");
+    setCopied(false);
+    setSavedFlash(false);
+    setOpenedFromHistory(true);
+    screenSeq.current += 1;
+    if (drawerOpen) closeDrawerTo(historyPillRef);
+    trackEvent("history_select", { video_id: entry.videoId });
+  }
+
+  /** Back to the empty form, ready for the next paste. */
+  function handleNewArticle() {
+    if (loading) return;
+    articleHistory.deselect();
+    setUrl("");
+    setArticle("");
+    setError("");
+    setCopied(false);
+    setOpenedFromHistory(false);
+    screenSeq.current += 1;
+    if (drawerOpen) closeDrawerTo(urlInputRef);
+    else urlInputRef.current?.focus();
+  }
+
+  async function handleRemoveEntry(id) {
+    const wasOnScreen = openedFromHistory && articleHistory.activeId === id;
+    trackEvent("history_delete", {});
+    await articleHistory.remove(id);
+    if (wasOnScreen && !inFlight.current) {
+      setUrl("");
+      setArticle("");
+      setOpenedFromHistory(false);
+    }
+  }
+
+  async function handleClearHistory() {
+    trackEvent("history_clear", { count: articleHistory.entries.length });
+    await articleHistory.clear();
+    if (openedFromHistory && !inFlight.current) {
+      setUrl("");
+      setArticle("");
+      setOpenedFromHistory(false);
+    }
   }
 
   function handleConnected(key, { remember }) {
@@ -251,9 +437,13 @@ export default function App() {
     }
   }
 
+  // Behind the open drawer nothing is reachable: the scrim blocks the mouse,
+  // `inert` does the same for Tab and screen readers. (React 18 wants a string.)
+  const pageInert = drawerOpen && location.pathname === "/" ? "" : undefined;
+
   return (
     <div className="page">
-      <header className="topbar">
+      <header className="topbar" inert={pageInert}>
         <Link
           className="brand"
           to="/"
@@ -266,6 +456,24 @@ export default function App() {
           {BRAND}
         </Link>
         <div className="topbar__right">
+          {location.pathname === "/" && (
+            <button
+              type="button"
+              className="chip history-pill"
+              onClick={openDrawer}
+              aria-controls="history"
+              aria-expanded={drawerOpen}
+              ref={historyPillRef}
+            >
+              <History size={14} aria-hidden="true" />
+              <span className="chip__label">History</span>
+              {unseenNew ? (
+                <span className="history-pill__dot" aria-label="New article saved" />
+              ) : (
+                articleHistory.entries.length > 0 && <span className="history-pill__count">{articleHistory.entries.length}</span>
+              )}
+            </button>
+          )}
           <ProviderChip connected={hasKey} onClick={() => openModal(hasKey ? "manage" : "connect")} />
           <nav className="nav" aria-label="Primary">
             <NavLink
@@ -290,7 +498,24 @@ export default function App() {
         <Route path="/about" element={<About />} />
         <Route path="/contact" element={<Contact />} />
         <Route path="/" element={
-          <main className="hero" id="top">
+          <div className={`workspace ${collapsed ? "workspace--collapsed" : ""}`}>
+          <HistorySidebar
+            entries={articleHistory.entries}
+            status={articleHistory.status}
+            activeId={articleHistory.activeId}
+            busy={loading}
+            pendingUrl={generatingUrl}
+            collapsed={collapsed}
+            open={drawerOpen}
+            onSelect={onSelectEntry}
+            onNew={onNewArticle}
+            onRemove={onRemoveEntry}
+            onClear={onClearHistory}
+            onToggleCollapsed={onToggleCollapsed}
+            onClose={closeDrawer}
+          />
+          {drawerOpen && <div className="history-scrim" onClick={closeDrawer} aria-hidden="true" />}
+          <main className="hero" id="top" inert={pageInert}>
           <div className="hero__inner">
             <div className="header">
               <span className="wordmark">
@@ -327,6 +552,7 @@ export default function App() {
                   spellCheck="false"
                   aria-label="YouTube URL"
                   data-focus-fallback
+                  ref={urlInputRef}
                 />
               </div>
               <button
@@ -391,8 +617,32 @@ export default function App() {
                 <div className="result-bar">
                   <span className="result-meta">
                     {stats.words.toLocaleString()} words · {stats.minutes} min read
+                    {openedFromHistory && activeEntry && (
+                      <span className="result-chip">
+                        <History size={12} aria-hidden="true" />
+                        From history · {shortDate(activeEntry.createdAt)}
+                      </span>
+                    )}
+                    {savedFlash && (
+                      <span className="result-chip result-chip--ok">
+                        <Check size={12} aria-hidden="true" />
+                        Saved
+                      </span>
+                    )}
                   </span>
                   <div className="result-actions">
+                    {openedFromHistory && activeEntry && (
+                      <button
+                        type="button"
+                        className="action-btn icon-only"
+                        onClick={() => startGeneration(activeEntry.url)}
+                        disabled={loading}
+                        aria-label="Regenerate"
+                        title="Regenerate this article"
+                      >
+                        <RotateCcw size={16} />
+                      </button>
+                    )}
                     <button
                       type="button"
                       className="action-btn icon-only"
@@ -416,15 +666,24 @@ export default function App() {
               </section>
             )}
 
-
+            {saveFailed && (
+              <div className="toast" role="status">
+                <AlertCircle size={15} aria-hidden="true" />
+                <span>Couldn&rsquo;t save to history. Copy the article now so you don&rsquo;t lose it.</span>
+                <button type="button" className="toast__close" onClick={clearHistoryError} aria-label="Dismiss">
+                  <X size={14} aria-hidden="true" />
+                </button>
+              </div>
+            )}
           </div>
           </main>
+          </div>
         } />
       </Routes>
 
 
 
-      <footer className="footer">
+      <footer className="footer" inert={pageInert}>
         <span className="footer__copyright">
           &copy; 2026 {BRAND}. All rights reserved.
         </span>

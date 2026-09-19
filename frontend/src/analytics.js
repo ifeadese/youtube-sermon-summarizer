@@ -18,6 +18,9 @@
 // generate_retry events. error_type values come from the client's error
 // types (see lib/gemini.js USER_MESSAGES). Never put the key (or any part of
 // it) in an event.
+// v2 additions (non-breaking): history_error {op, error_type} when the
+// article-history store fails, history_select {video_id}, history_delete and
+// history_clear {count} from the sidebar; never the article or the key.
 const SCHEMA_VERSION = 2;
 
 // Only the production site reports. Preview deployments are built with the

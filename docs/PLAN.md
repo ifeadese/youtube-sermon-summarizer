@@ -14,6 +14,7 @@ Product thinking doc • June 2026
 - [Engineering Philosophy](#engineering-philosophy)
 - [Long-Term Vision](#long-term-vision)
 - [Phase 2 (Post-MVP): Content Summarizer Evolution](#phase-2-post-mvp-content-summarizer-evolution)
+- [Article History (Sept 2026 addition)](#article-history-sept-2026-addition)
 - [MVP Roadmap & Milestones](#mvp-roadmap--milestones)
   - [Milestone 1: Backend Foundation](#milestone-1-backend-foundation)
   - [Milestone 2: AI Integration](#milestone-2-ai-integration)
@@ -65,7 +66,7 @@ One simple web app that collapses the entire pipeline into a single flow:
 - Output is a clean, ready-to-publish article
 - Review, copy, done
 
-No login system. No database. No fluff. Just the pipeline — in one screen.
+No login system. No database. No fluff. Just the pipeline — in one screen. (Since Sept 2026 the app keeps a list of past articles in the browser — still no accounts, still no database; see [Article History](#article-history-sept-2026-addition).)
 
 ## Tech Stack
 
@@ -133,6 +134,49 @@ Expand public scope only when all are consistently true over a meaningful sample
 ## TL;DR
 
 One input. One button. One output. Get that right first.
+
+---
+
+## Article History (Sept 2026 addition)
+
+Every finished article is kept and listed in a sidebar beside the tool, the way a chat app lists past conversations. Click an entry to bring the article and its URL back; regenerate it, delete it, or clear the list. On narrow screens the sidebar is a drawer opened from a "History" pill in the top bar. The UX spec (every sidebar, row, drawer and result-pane state, with the exact copy and behaviour rules) is the maintainer's "History Sidebar" mock page, kept outside the repo; the code implements its copy and rules as written.
+
+### Where it lives
+
+Everything is under `frontend/src/history/`. The layering is deliberate so the storage backend can be replaced without touching the UI:
+
+| Layer | File | Knows about |
+|---|---|---|
+| Entry model | `entry.js` | the record shape, title/word-count derivation, validation (`isEntry`), schema version |
+| Store contract | `store/HistoryStore.js` | the interface every backend implements |
+| Backends | `store/localStorageStore.js`, `store/memoryStore.js` | one storage mechanism each |
+| Factory | `createHistoryStore.js` | **the one line that picks the backend** |
+| React | `HistoryProvider.jsx`, `useHistory.js` | the store, via context; nothing about storage |
+| UI | `HistorySidebar.jsx`, `format.js` | the hook's state and callbacks; nothing about storage |
+
+`store/storeContract.js` is a shared test suite that every backend must pass (`runHistoryStoreContract`). A new backend is one file plus one line in the factory, verified by the same tests.
+
+### The contract (`HistoryStore`)
+
+- `list()`, `save(entry)`, `remove(id)`, `clear()` — **all async**, even when the backing store is synchronous, so a server-backed adapter needs no changes upstream.
+- `list()` resolves newest first. Callers never sort.
+- `save()` upserts by id and enforces the cap (`MAX_ENTRIES`, 50) by dropping the oldest. It rejects with an `Error` whose `type` is `"quota"` (cannot store even after eviction), `"unavailable"` (the store cannot be used at all) or `"incompatible"` (the stored data belongs to another schema version and is left untouched).
+- `subscribe(listener)` — optional. Fires when the data changed *outside* this instance (another tab, another device). Returns an unsubscribe function.
+- `isAvailable()` — optional, synchronous. `false` makes the sidebar show "History is off"; generation keeps working and saves are skipped.
+
+Saving is best-effort everywhere: the hook's `save` resolves to the entry or `null`, never throws, and the article stays on screen. A refused save shows a toast and reports a `history_error` analytics event (`{op, error_type}`); never the article or the key.
+
+### Storage today: localStorage (interim)
+
+- Key `sermon.history`, a versioned envelope `{ version, entries }`. Corrupt data reads as empty; records failing `isEntry` are dropped. An envelope from a different schema version (a newer deploy open in another tab) also reads as empty but is never overwritten: saves reject as `"incompatible"` until the tab reloads.
+- Cap of 50 entries, ~5 KB each, so ~250 KB against a ~5 MB per-origin budget. On a quota error (and only a quota error) the oldest entries are evicted one at a time before giving up. A full origin still counts as available, so existing entries can be opened and deleted; only an empty storage that refuses writes reads as "History is off".
+- Cross-tab sync is free via the `storage` event.
+- Chosen over IndexedDB for the pilot: the data is tiny, it matches the key store's conventions, jsdom ships it (no fake IndexedDB in tests), and cross-tab sync needs no extra plumbing. IndexedDB earns its place only if the cap is lifted or transcripts are stored.
+- Like every browser store it does not survive the user clearing site data, and it does not follow the user across devices. That is the known limitation of this phase.
+
+### When it moves off the browser
+
+Candidates, in rough order of fit: Supabase (free Postgres + Google sign-in + row-level security, one CSP origin), Firebase (the Google-native equivalent), or Google Drive's `appDataFolder` (cross-device without any database you run, since the user already brings a Google key). Whichever it is: write `store/<name>Store.js`, run it through `storeContract.js`, switch the factory, add the origin to the CSP in `frontend/vercel.json`, and on first sign-in import the entries the local store still holds (they are already schema-versioned for that). Export/import buttons are the manual escape hatch until then.
 
 ---
 

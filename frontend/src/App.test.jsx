@@ -5,6 +5,9 @@ import App from "./App.jsx";
 import { trackEvent, trackPageView } from "./analytics.js";
 import { generateReflection, validateKey } from "./lib/gemini.js";
 import { clearKey, getKey, setKey } from "./lib/keyStore.js";
+import HistoryProvider from "./history/HistoryProvider.jsx";
+import { createMemoryStore } from "./history/store/memoryStore.js";
+import { makeEntry } from "./history/store/storeContract.js";
 
 // Analytics is mocked file-wide: the existing tests don't assert on it (the
 // mocked fns are harmless no-ops), and the analytics-specific tests below assert
@@ -29,11 +32,16 @@ vi.mock("./lib/gemini.js", async (importOriginal) => ({
 const KEY = "AIzaTESTKEY00000000000000000000000000000";
 const URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
 
+// A fresh in-memory history store per test, so tests can inspect what the
+// app saved without going through localStorage.
+let historyStore;
+
 beforeEach(() => {
   vi.clearAllMocks();
   clearKey();
   window.localStorage.clear();
   window.sessionStorage.clear();
+  historyStore = createMemoryStore();
 });
 
 afterEach(() => {
@@ -59,7 +67,13 @@ function mockFailure(type, message, status, extra = {}) {
 }
 
 function renderApp(initialEntries = ["/"]) {
-  return render(<MemoryRouter initialEntries={initialEntries}><App /></MemoryRouter>);
+  return render(
+    <MemoryRouter initialEntries={initialEntries}>
+      <HistoryProvider store={historyStore}>
+        <App />
+      </HistoryProvider>
+    </MemoryRouter>,
+  );
 }
 
 function typeUrl(value = URL) {
@@ -866,5 +880,402 @@ describe("Analytics events", () => {
     await screen.findByRole("button", { name: /copied/i });
 
     expect(trackEvent).toHaveBeenCalledWith("copy_article", { success: true });
+  });
+});
+
+describe("article history", () => {
+  const ARTICLE = "The Quiet Work of Waiting on God\n\nPsalm 27:13-14\n\nA reflection body.";
+
+  it("saves the finished article with its url, provider and model", async () => {
+    connectKey();
+    mockArticle(ARTICLE);
+    renderApp();
+    typeUrl();
+    clickGenerate();
+    await screen.findByLabelText("Generated article");
+    await waitFor(async () => expect(await historyStore.list()).toHaveLength(1));
+    const [entry] = await historyStore.list();
+    expect(entry).toMatchObject({
+      url: URL,
+      videoId: "dQw4w9WgXcQ",
+      title: "The Quiet Work of Waiting on God",
+      article: ARTICLE,
+      provider: "gemini",
+      model: "gemini-test-model",
+    });
+    expect(trackEvent).not.toHaveBeenCalledWith("history_error", expect.anything());
+  });
+
+  it("does not save when generation fails", async () => {
+    connectKey();
+    mockFailure("network", "Could not reach Google.", 0);
+    renderApp();
+    typeUrl();
+    clickGenerate();
+    await screen.findByRole("alert");
+    expect(await historyStore.list()).toEqual([]);
+  });
+
+  it("does not save when generation is cancelled", async () => {
+    connectKey();
+    generateReflection.mockImplementation(({ signal, onDelta }) => new Promise((_, reject) => {
+      onDelta("partial text");
+      signal.addEventListener("abort", () => reject(Object.assign(new Error("cancelled"), { type: "cancelled" })));
+    }));
+    renderApp();
+    typeUrl();
+    clickGenerate();
+    await screen.findByLabelText("Generated article");
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByLabelText("Generated article")).toBeNull());
+    expect(await historyStore.list()).toEqual([]);
+  });
+
+  it("keeps the article on screen and reports history_error when the store refuses the save", async () => {
+    connectKey();
+    mockArticle(ARTICLE);
+    historyStore.save = vi.fn().mockRejectedValue(Object.assign(new Error("full"), { type: "quota" }));
+    renderApp();
+    typeUrl();
+    clickGenerate();
+    await screen.findByLabelText("Generated article");
+    await waitFor(() => expect(trackEvent).toHaveBeenCalledWith("history_error", { op: "save", error_type: "quota" }));
+    expect(screen.getByLabelText("Generated article")).toHaveTextContent("The Quiet Work of Waiting on God");
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(trackEvent).toHaveBeenCalledWith("generate_success", expect.objectContaining({ video_id: "dQw4w9WgXcQ" }));
+  });
+
+  it("shows history as unavailable without breaking generation when storage is blocked", async () => {
+    connectKey();
+    mockArticle(ARTICLE);
+    historyStore.isAvailable = () => false;
+    const spy = vi.spyOn(historyStore, "save");
+    renderApp();
+    typeUrl();
+    clickGenerate();
+    await screen.findByLabelText("Generated article");
+    await waitFor(() => expect(trackEvent).toHaveBeenCalledWith("generate_success", expect.anything()));
+    expect(spy).not.toHaveBeenCalled();
+    expect(trackEvent).not.toHaveBeenCalledWith("history_error", expect.anything());
+  });
+});
+
+describe("history sidebar", () => {
+  const ARTICLE = "The Quiet Work of Waiting on God\n\nPsalm 27:13-14\n\nA reflection body.";
+  const sidebar = () => screen.getByRole("complementary", { name: "Article history" });
+  // The rail (collapsed view) duplicates "New article" and stays in the DOM,
+  // so queries are scoped to the panel. Titles anchor at the start because the
+  // delete buttons are named "Delete <title>".
+  const panel = () => within(sidebar().querySelector(".history__panel"));
+  const row = (title) => panel().getByRole("button", { name: new RegExp(`^${title}`) });
+
+  /** Two saved entries: one from today, one from last month. */
+  function seed() {
+    historyStore = createMemoryStore({
+      initial: [
+        makeEntry({ id: "today", now: new Date(), article: "Bread for the Journey\n\nBody one." }),
+        makeEntry({ id: "old", now: new Date(Date.now() - 30 * 86400e3), article: "Our Names Are Written\n\nBody two." }),
+      ],
+    });
+  }
+
+  it("shows the empty state, with the browser-only caveat, when nothing is saved", async () => {
+    renderApp();
+    expect(await panel().findByText("Nothing here yet")).toBeInTheDocument();
+    expect(panel().getByText(/saved in this browser only/)).toBeInTheDocument();
+    expect(panel().queryByText("Clear history")).toBeNull();
+  });
+
+  it("shows 'History is off' when storage is blocked", async () => {
+    historyStore.isAvailable = () => false;
+    renderApp();
+    expect(await panel().findByText("History is off")).toBeInTheDocument();
+  });
+
+  it("lists saved entries newest first, grouped by day, with a count in the footer", async () => {
+    seed();
+    renderApp();
+    await panel().findByText("Bread for the Journey");
+    const groups = panel().getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
+    expect(groups).toEqual(["Today", "Older"]);
+    const titles = panel().getAllByRole("button", { name: /words/ }).map((b) => b.textContent);
+    expect(titles[0]).toMatch(/^Bread for the Journey/);
+    expect(titles[1]).toMatch(/^Our Names Are Written/);
+    expect(panel().getByText("2 articles")).toBeInTheDocument();
+  });
+
+  it("opening an entry shows its article, fills the URL, marks it current and offers Regenerate", async () => {
+    seed();
+    renderApp();
+    fireEvent.click(await panel().findByRole("button", { name: /^Our Names Are Written/ }));
+    expect(screen.getByLabelText("Generated article")).toHaveTextContent("Our Names Are Written");
+    expect(screen.getByLabelText("YouTube URL")).toHaveValue(URL);
+    expect(row("Our Names Are Written")).toHaveAttribute("aria-current", "true");
+    expect(row("Bread for the Journey")).not.toHaveAttribute("aria-current");
+    expect(screen.getByText(/From history/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Regenerate" })).toBeInTheDocument();
+    expect(trackEvent).toHaveBeenCalledWith("history_select", { video_id: "dQw4w9WgXcQ" });
+  });
+
+  it("Regenerate runs a fresh generation for the open entry's URL and saves a new entry", async () => {
+    seed();
+    connectKey();
+    mockArticle(ARTICLE);
+    renderApp();
+    fireEvent.click(await panel().findByRole("button", { name: /^Our Names Are Written/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Regenerate" }));
+    await waitFor(() => expect(generateReflection).toHaveBeenCalledWith(expect.objectContaining({ url: URL, key: KEY })));
+    await panel().findByText("The Quiet Work of Waiting on God");
+    expect(await historyStore.list()).toHaveLength(3);
+    expect(screen.queryByText(/From history/)).toBeNull();
+    expect(screen.getByText("Saved")).toBeInTheDocument();
+  });
+
+  it("a finished generation appears at the top of Today and becomes the current row", async () => {
+    connectKey();
+    mockArticle(ARTICLE);
+    renderApp();
+    typeUrl();
+    clickGenerate();
+    const newRow = await panel().findByRole("button", { name: /^The Quiet Work of Waiting on God/ });
+    expect(newRow).toHaveAttribute("aria-current", "true");
+    expect(panel().getByText("1 article")).toBeInTheDocument();
+    expect(screen.getByText("Saved")).toBeInTheDocument();
+  });
+
+  it("shows a pending row while generating and disables New article", async () => {
+    connectKey();
+    let finish;
+    generateReflection.mockImplementation(({ onDelta }) => new Promise((resolve) => {
+      onDelta("partial");
+      finish = () => resolve(ARTICLE);
+    }));
+    renderApp();
+    typeUrl();
+    clickGenerate();
+    expect(await panel().findByText(/Writing article/)).toBeInTheDocument();
+    expect(panel().getByText("youtu.be/dQw4w9WgXcQ")).toBeInTheDocument();
+    expect(panel().getByRole("button", { name: "New article" })).toBeDisabled();
+    await act(async () => finish());
+    await waitFor(() => expect(panel().queryByText(/Writing article/)).toBeNull());
+    expect(panel().getByRole("button", { name: /^The Quiet Work of Waiting on God/ })).toBeInTheDocument();
+  });
+
+  it("New article clears the open entry and focuses the URL input", async () => {
+    seed();
+    renderApp();
+    fireEvent.click(await panel().findByRole("button", { name: /^Bread for the Journey/ }));
+    expect(screen.getByLabelText("Generated article")).toBeInTheDocument();
+    fireEvent.click(panel().getByRole("button", { name: "New article" }));
+    expect(screen.queryByLabelText("Generated article")).toBeNull();
+    expect(screen.getByLabelText("YouTube URL")).toHaveValue("");
+    expect(screen.getByLabelText("YouTube URL")).toHaveFocus();
+    expect(row("Bread for the Journey")).not.toHaveAttribute("aria-current");
+  });
+
+  it("delete asks inline, Keep backs out, Delete removes the entry and clears it from the screen", async () => {
+    seed();
+    renderApp();
+    fireEvent.click(await panel().findByRole("button", { name: /^Bread for the Journey/ }));
+    fireEvent.click(panel().getByRole("button", { name: "Delete Bread for the Journey" }));
+    expect(panel().getByRole("alert")).toHaveTextContent("Delete this article?");
+    fireEvent.click(panel().getByRole("button", { name: "Keep" }));
+    expect(panel().queryByRole("alert")).toBeNull();
+    expect(row("Bread for the Journey")).toBeInTheDocument();
+
+    fireEvent.click(panel().getByRole("button", { name: "Delete Bread for the Journey" }));
+    fireEvent.click(panel().getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(panel().queryByText("Bread for the Journey")).toBeNull());
+    expect((await historyStore.list()).map((e) => e.id)).toEqual(["old"]);
+    expect(screen.queryByLabelText("Generated article")).toBeNull();
+    expect(screen.getByLabelText("YouTube URL")).toHaveValue("");
+    expect(trackEvent).toHaveBeenCalledWith("history_delete", {});
+  });
+
+  it("deleting an entry that is not on screen leaves the open article alone", async () => {
+    seed();
+    renderApp();
+    fireEvent.click(await panel().findByRole("button", { name: /^Bread for the Journey/ }));
+    fireEvent.click(panel().getByRole("button", { name: "Delete Our Names Are Written" }));
+    fireEvent.click(panel().getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(panel().queryByText("Our Names Are Written")).toBeNull());
+    expect(screen.getByLabelText("Generated article")).toHaveTextContent("Bread for the Journey");
+  });
+
+  it("Clear history asks inline and then empties everything", async () => {
+    seed();
+    renderApp();
+    fireEvent.click(await panel().findByRole("button", { name: /^Bread for the Journey/ }));
+    fireEvent.click(panel().getByRole("button", { name: "Clear history" }));
+    expect(panel().getByRole("alert")).toHaveTextContent("Remove all 2 articles from this browser?");
+    fireEvent.click(panel().getByRole("button", { name: "Clear all" }));
+    expect(await panel().findByText("Nothing here yet")).toBeInTheDocument();
+    expect(await historyStore.list()).toEqual([]);
+    expect(screen.queryByLabelText("Generated article")).toBeNull();
+    expect(trackEvent).toHaveBeenCalledWith("history_clear", { count: 2 });
+  });
+
+  it("arrow keys move between rows and Delete starts the confirm", async () => {
+    seed();
+    renderApp();
+    const first = await panel().findByRole("button", { name: /^Bread for the Journey/ });
+    first.focus();
+    fireEvent.keyDown(first, { key: "ArrowDown" });
+    expect(row("Our Names Are Written")).toHaveFocus();
+    fireEvent.keyDown(document.activeElement, { key: "ArrowUp" });
+    expect(first).toHaveFocus();
+    fireEvent.keyDown(first, { key: "Delete" });
+    expect(panel().getByRole("alert")).toHaveTextContent("Delete this article?");
+    fireEvent.keyDown(panel().getByRole("button", { name: "Keep" }), { key: "Escape" });
+    expect(panel().queryByRole("alert")).toBeNull();
+  });
+
+  it("shows a dismissable toast when a save is refused", async () => {
+    connectKey();
+    mockArticle(ARTICLE);
+    historyStore.save = vi.fn().mockRejectedValue(Object.assign(new Error("full"), { type: "quota" }));
+    renderApp();
+    typeUrl();
+    clickGenerate();
+    const toast = await screen.findByText(/Couldn.t save to history/);
+    expect(toast).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Dismiss" }));
+    expect(screen.queryByText(/Couldn.t save to history/)).toBeNull();
+  });
+
+  it("collapses to a rail and back, remembering the choice", async () => {
+    seed();
+    renderApp();
+    await panel().findByText("Bread for the Journey");
+    fireEvent.click(panel().getByRole("button", { name: "Hide history" }));
+    expect(sidebar()).toHaveClass("history--collapsed");
+    expect(window.localStorage.getItem("sermon.history.collapsed")).toBe("1");
+    fireEvent.click(within(sidebar()).getByRole("button", { name: "Show history" }));
+    expect(sidebar()).not.toHaveClass("history--collapsed");
+    expect(window.localStorage.getItem("sermon.history.collapsed")).toBeNull();
+  });
+
+  it("the top-bar pill opens the drawer, a row tap closes it, and Escape closes it too", async () => {
+    seed();
+    renderApp();
+    await panel().findByText("Bread for the Journey");
+    const pill = screen.getByRole("button", { name: /History/, expanded: false });
+    fireEvent.click(pill);
+    expect(sidebar()).toHaveClass("history--open");
+    expect(pill).toHaveAttribute("aria-expanded", "true");
+    fireEvent.click(row("Bread for the Journey"));
+    expect(sidebar()).not.toHaveClass("history--open");
+    fireEvent.click(pill);
+    expect(sidebar()).toHaveClass("history--open");
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(sidebar()).not.toHaveClass("history--open");
+    expect(pill).toHaveFocus();
+  });
+
+  it("the pending row names the video being generated, whatever the input box says", async () => {
+    connectKey();
+    generateReflection.mockImplementation(() => new Promise(() => {}));
+    renderApp();
+    typeUrl("youtube.com/watch?v=dQw4w9WgXcQ"); // scheme-less: accepted, but not parseable as typed
+    clickGenerate();
+    expect(await panel().findByText("youtu.be/dQw4w9WgXcQ")).toBeInTheDocument();
+    typeUrl("");
+    expect(panel().getByText(/Writing article/)).toBeInTheDocument();
+    expect(panel().getByText("youtu.be/dQw4w9WgXcQ")).toBeInTheDocument();
+  });
+
+  it("stops loading as soon as the article is done, without waiting for a slow store", async () => {
+    connectKey();
+    mockArticle(ARTICLE);
+    const realSave = historyStore.save;
+    let release;
+    historyStore.save = (entry) => new Promise((resolve) => {
+      release = () => resolve(realSave(entry));
+    });
+    renderApp();
+    typeUrl();
+    clickGenerate();
+    await screen.findByLabelText("Generated article");
+    await waitFor(() => expect(release).toBeTypeOf("function"));
+    expect(screen.queryByRole("button", { name: "Cancel" })).toBeNull();
+    expect(panel().getByRole("button", { name: "New article" })).toBeEnabled();
+    expect(screen.queryByText("Saved")).toBeNull();
+    await act(async () => release());
+    expect(await screen.findByText("Saved")).toBeInTheDocument();
+  });
+
+  it("a save that lands after the user moved on does not flash Saved over another article", async () => {
+    seed();
+    connectKey();
+    mockArticle(ARTICLE);
+    const realSave = historyStore.save;
+    let release;
+    historyStore.save = (entry) => new Promise((resolve) => {
+      release = () => resolve(realSave(entry));
+    });
+    renderApp();
+    typeUrl();
+    clickGenerate();
+    await waitFor(() => expect(release).toBeTypeOf("function"));
+    fireEvent.click(row("Bread for the Journey"));
+    await act(async () => release());
+    await panel().findByRole("button", { name: /^The Quiet Work of Waiting on God/ });
+    expect(screen.queryByText("Saved")).toBeNull();
+    expect(row("Bread for the Journey")).toHaveAttribute("aria-current", "true");
+  });
+
+  it("Escape backs out of a delete confirm without also closing the drawer", async () => {
+    seed();
+    renderApp();
+    const first = await panel().findByRole("button", { name: /^Bread for the Journey/ });
+    fireEvent.click(screen.getByRole("button", { name: /History/, expanded: false }));
+    first.focus();
+    fireEvent.keyDown(first, { key: "Delete" });
+    fireEvent.keyDown(panel().getByRole("button", { name: "Keep" }), { key: "Escape" });
+    expect(panel().queryByRole("alert")).toBeNull();
+    expect(sidebar()).toHaveClass("history--open");
+    expect(row("Bread for the Journey")).toHaveFocus();
+  });
+
+  it("Keep hands focus back to the row it was asked about", async () => {
+    seed();
+    renderApp();
+    await panel().findByText("Bread for the Journey");
+    fireEvent.click(panel().getByRole("button", { name: "Delete Bread for the Journey" }));
+    fireEvent.click(panel().getByRole("button", { name: "Keep" }));
+    expect(row("Bread for the Journey")).toHaveFocus();
+  });
+
+  it("the open drawer makes the page behind it inert, and a row tap returns focus to the pill", async () => {
+    seed();
+    renderApp();
+    await panel().findByText("Bread for the Journey");
+    const pill = screen.getByRole("button", { name: /History/, expanded: false });
+    expect(screen.getByRole("main")).not.toHaveAttribute("inert");
+    fireEvent.click(pill);
+    expect(screen.getByRole("main")).toHaveAttribute("inert");
+    expect(screen.getByRole("banner")).toHaveAttribute("inert");
+    fireEvent.click(row("Bread for the Journey"));
+    expect(screen.getByRole("main")).not.toHaveAttribute("inert");
+    expect(pill).toHaveFocus();
+  });
+
+  it("picks up entries saved in another tab and drops a current one that vanished", async () => {
+    seed();
+    renderApp();
+    fireEvent.click(await panel().findByRole("button", { name: /^Bread for the Journey/ }));
+    await act(async () => {
+      historyStore._emitExternalChange([makeEntry({ id: "elsewhere", article: "Sent From Another Tab\n\nBody." })]);
+    });
+    await panel().findByText("Sent From Another Tab");
+    expect(panel().queryByText("Bread for the Journey")).toBeNull();
+    // The text stays on screen (nothing destroyed it) but no row claims it.
+    expect(panel().queryByRole("button", { current: "true" })).toBeNull();
+  });
+
+  it("is absent on the About page", async () => {
+    renderApp(["/about"]);
+    expect(screen.queryByRole("complementary", { name: "Article history" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /History/ })).toBeNull();
   });
 });
